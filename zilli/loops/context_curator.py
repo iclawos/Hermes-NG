@@ -106,18 +106,24 @@ class ContextCurator:
             lines.append(f"- [{b.id}] ({b.confidence:.1f}) {b.description}")
         return "\n".join(lines)
 
+    def _existing_descriptions(self) -> set[str]:
+        return {b.description for b in self._bullets.values()}
+
     def reflect(self, trajectories: list[Trajectory]) -> list[str]:
         """ACE Reflector: distill insights from trajectories into new bullets.
 
         Returns IDs of newly created bullets.
         """
         new_ids: list[str] = []
+        existing = self._existing_descriptions()
         failures = [t for t in trajectories if t.outcome == "failure"]
         successes = [t for t in trajectories if t.outcome == "success"]
 
         if successes:
             common = self._extract_common_patterns(successes)
             for pattern in common:
+                if pattern in existing:
+                    continue
                 bid = self.add_bullet(
                     description=pattern,
                     category="success_pattern",
@@ -125,17 +131,22 @@ class ContextCurator:
                     source_trajectory=f"{len(successes)} successful runs",
                 )
                 new_ids.append(bid)
+                existing.add(pattern)
 
         if failures:
             pitfalls = self._extract_common_patterns(failures)
             for pitfall in pitfalls:
+                label = f"AVOID: {pitfall}"
+                if label in existing:
+                    continue
                 bid = self.add_bullet(
-                    description=f"AVOID: {pitfall}",
+                    description=label,
                     category="pitfall",
                     confidence=0.7,
                     source_trajectory=f"{len(failures)} failed runs",
                 )
                 new_ids.append(bid)
+                existing.add(label)
 
         self._save()
         return new_ids

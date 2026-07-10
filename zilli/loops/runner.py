@@ -173,6 +173,12 @@ class LoopRunner(Generic[T]):
                 logger.info("%s trigger stopped", self._name)
                 break
 
+    @staticmethod
+    def _extract_task_id(input_data: Any, fallback: str) -> str:
+        if isinstance(input_data, dict):
+            return str(input_data.get("task_id", fallback))
+        return str(getattr(input_data, "task_id", fallback))
+
     def _mine_failures(self, result: LoopResult) -> None:
         if not self._weakness_miner:
             return
@@ -180,7 +186,7 @@ class LoopRunner(Generic[T]):
         for cycle in result.cycles:
             if cycle.verification and not cycle.verification.passed:
                 traces.append({
-                    "task_id": str(getattr(cycle.input_data, "task_id", cycle.id)),
+                    "task_id": self._extract_task_id(cycle.input_data, cycle.id),
                     "verifier_outcome": (cycle.verification.evidence or "failed")[:80],
                     "causal_status": cycle.error or "verification_failed",
                     "mechanism": "loop_runner",
@@ -194,7 +200,7 @@ class LoopRunner(Generic[T]):
         if not self._context_curator:
             return
         trajectory = Trajectory(
-            task_id=str(getattr(cycle.input_data, "task_id", cycle.id)),
+            task_id=self._extract_task_id(cycle.input_data, cycle.id),
             actions=cycle.metadata.get("actions", []),
             outcome=outcome,
             verifier_evidence=cycle.verification.evidence if cycle.verification else "",

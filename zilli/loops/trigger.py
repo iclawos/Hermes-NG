@@ -63,7 +63,10 @@ class DynamicIntervalTrigger(Trigger):
 
     async def wait(self) -> bool:
         if self._interval_fn:
-            interval = self._interval_fn(self._last_state)
+            try:
+                interval = self._interval_fn(self._last_state)
+            except Exception:
+                interval = self._min
         else:
             interval = self._min
         interval = max(self._min, min(interval, self._max))

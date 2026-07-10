@@ -98,7 +98,7 @@ class SkillEvolutionEngine:
                 source = f.read()
         except (FileNotFoundError, IOError, UnicodeDecodeError):
             source = ""
-        functions = re.findall(r"def\s+(\w+)\s*\(.*?\):", source)
+        functions = re.findall(r"def\s+(\w+)\s*\(.*?\):", source, re.DOTALL)
         classes = re.findall(r"class\s+(\w+)\s*[\(:]", source)
         imports = re.findall(r"^(?:from|import)\s+(\S+)", source, re.MULTILINE)
         docstrings = re.findall(r'"""(.*?)"""', source, re.DOTALL)[:3]
@@ -160,14 +160,21 @@ class SkillEvolutionEngine:
         optimized["prompt_optimized"] = True
         lines = source.split("\n")
         improved = []
+        in_docstring = False
         for i, line in enumerate(lines):
             stripped = line.strip()
             indent = line[:len(line) - len(line.lstrip())]
-            if stripped.startswith('"""') or stripped.endswith('"""'):
+            if stripped.startswith('"""'):
                 improved.append(line)
-                if i > 0 and stripped.startswith('"""'):
-                    improved.append(f"{indent}# Prompt: optimize instruction clarity")
-            elif stripped.startswith("def ") and i > 1:
+                if not stripped.endswith('"""') or len(stripped) == 3:
+                    in_docstring = not in_docstring
+                continue
+            if in_docstring:
+                improved.append(line)
+                if stripped.endswith('"""'):
+                    in_docstring = False
+                continue
+            if stripped.startswith("def ") and i > 1:
                 improved.append(line)
                 improved.append(f"{indent}    # TODO: add docstring and type hints")
             else:
@@ -195,9 +202,7 @@ class SkillEvolutionEngine:
                     body_indent = lines[body_start][:len(lines[body_start]) - len(lines[body_start].lstrip())]
                     if not any(e in lines[min(body_start, len(lines)-1)] for e in ("try:", "except", "raise")):
                         improved.append(f"{body_indent}try:")
-                        improved.append(lines[body_start])
-                        body_start += 1
-                        last_j = body_start
+                        last_j = body_start - 1
                         for j in range(body_start, min(body_start + 5, len(lines))):
                             if lines[j].strip() and not lines[j].strip().startswith(("def ", "class ", "@", "#")):
                                 improved.append(f"{body_indent}    {lines[j].lstrip()}")
