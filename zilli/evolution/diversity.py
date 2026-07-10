@@ -123,17 +123,14 @@ class DiversityController:
             return True
 
         max_sim = 0.0
+        candidate_ngram = ngram_fingerprint(candidate_source) if self._use_ngram else None
         for entry in self._population:
             sim = fingerprint_similarity(candidate_fp, entry.fingerprint)
+            if self._use_ngram:
+                ngram_sim = jaccard_similarity(candidate_ngram, ngram_fingerprint(entry.source))
+                sim = max(sim, ngram_sim)
             if sim > max_sim:
                 max_sim = sim
-            if self._use_ngram:
-                ngram_a = ngram_fingerprint(candidate_source)
-                ngram_b = ngram_fingerprint(entry.source)
-                ngram_sim = jaccard_similarity(ngram_a, ngram_b)
-                sim = max(sim, ngram_sim)
-                if sim > max_sim:
-                    max_sim = sim
 
         if max_sim > (1.0 - self._threshold):
             self._rejected_count += 1

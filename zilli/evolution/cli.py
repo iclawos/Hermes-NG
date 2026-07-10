@@ -110,6 +110,7 @@ def main():
     engine = SkillEvolutionEngine(
         reflection_model=args.reflection_model,
         diversity_controller=diversity,
+        mode=args.mode,
     )
     engine.max_iterations = args.max_iterations
 

@@ -196,6 +196,7 @@ class ContextCurator:
                     "category": b.category,
                     "confidence": b.confidence,
                     "created_at": b.created_at,
+                    "last_accessed": b.last_accessed,
                     "hit_count": b.hit_count,
                     "source_trajectory": b.source_trajectory,
                 }

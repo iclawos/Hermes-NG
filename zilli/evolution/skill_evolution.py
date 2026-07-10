@@ -11,10 +11,12 @@ logger = logging.getLogger(__name__)
 class SkillEvolutionEngine:
     def __init__(self, reflection_model: Optional[str] = None,
                  cost_controller=None,
-                 diversity_controller: Optional[DiversityController] = None):
+                 diversity_controller: Optional[DiversityController] = None,
+                 mode: str = "evolve"):
         self.reflection_model = reflection_model or os.environ.get("ZILLI_REFLECTION_MODEL")
         self.cost_controller = cost_controller
         self.diversity = diversity_controller or DiversityController()
+        self.mode = mode
         self.max_iterations = 10
         self.evolution_strategies = [
             "prompt_optimization",

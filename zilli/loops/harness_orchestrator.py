@@ -201,20 +201,25 @@ class HarnessOrchestrator:
             if held_out_results else 1.0
         )
 
-        if not self._history:
-            prev_pass_rate = self._history[-1].held_in_pass_rate if self._history else 0.0
-        else:
-            prev_pass_rate = self._history[-1].held_in_pass_rate
+        prev_pass_rate = self._history[-1].held_in_pass_rate if self._history else 0.0
 
         improvement = candidate.held_in_pass_rate - prev_pass_rate
         regression = candidate.held_out_pass_rate < (
             self._history[-1].held_out_pass_rate if self._history else 1.0
         )
 
-        candidate.accepted = improvement >= self._threshold and not regression
+        candidate.accepted = (
+            improvement >= self._threshold
+            and not regression
+        )
 
         for edit in candidate.edits:
             edit.accepted = candidate.accepted
+            if not candidate.accepted:
+                if regression:
+                    edit.rejection_reason = "regression on held-out tasks"
+                else:
+                    edit.rejection_reason = f"held-in improvement {improvement:.2f} < threshold {self._threshold}"
             if not candidate.accepted:
                 if regression:
                     edit.rejection_reason = "regression on held-out tasks"
