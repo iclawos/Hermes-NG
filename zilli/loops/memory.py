@@ -84,8 +84,10 @@ class CycleMemory:
         try:
             self._persist_path.parent.mkdir(parents=True, exist_ok=True)
             data = [asdict(e) for e in self._entries]
-            with open(self._persist_path, "w") as f:
+            tmp = self._persist_path.with_suffix(".tmp")
+            with open(tmp, "w") as f:
                 json.dump(data, f, indent=2, default=str)
+            tmp.replace(self._persist_path)
         except Exception as e:
             logger.warning("Failed to persist memory: %s", e)
 

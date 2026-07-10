@@ -104,6 +104,8 @@ class CompositeVerifier(Verifier):
         self._require_all = require_all
 
     async def verify(self, input_data: Any, output: Any) -> VerificationResult:
+        if not self._verifiers:
+            return VerificationResult(passed=True, evidence="No verifiers configured")
         results = await asyncio.gather(*[v.verify(input_data, output) for v in self._verifiers])
         passed = all(r.passed for r in results) if self._require_all else any(r.passed for r in results)
         evidence = "; ".join(r.evidence for r in results)
@@ -112,7 +114,7 @@ class CompositeVerifier(Verifier):
             passed=passed,
             evidence=evidence,
             details=details,
-            confidence=min(r.confidence for r in results) if results else 0.0,
+            confidence=min(r.confidence for r in results),
         )
 
 
@@ -132,9 +134,18 @@ class SkillVerifier(Verifier):
 
     async def verify(self, input_data: Any, output: Any) -> VerificationResult:
         if not self._skill_path.exists():
-            return VerificationResult(passed=True, evidence=f"Skill file {self._skill_path} not found")
+            return VerificationResult(
+                passed=False, evidence=f"Skill file {self._skill_path} not found",
+                confidence=0.0,
+            )
 
-        skill = self._skill_path.read_text(encoding="utf-8")
+        try:
+            skill = self._skill_path.read_text(encoding="utf-8")
+        except (OSError, PermissionError) as e:
+            return VerificationResult(
+                passed=False, evidence=f"Cannot read skill file: {e}",
+                confidence=0.0,
+            )
         prompt = (
             f"You are a strict verifier enforcing the following skill rules:\n\n"
             f"{skill}\n\n"

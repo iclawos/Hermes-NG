@@ -86,9 +86,11 @@ class ContextCurator:
             bullets = [b for b in self._bullets.values() if b.category == category]
         else:
             bullets = list(self._bullets.values())
-        for b in bullets:
-            b.last_accessed = time.time()
-            b.hit_count += 1
+        if bullets:
+            for b in bullets:
+                b.last_accessed = time.time()
+                b.hit_count += 1
+            self._save()
         return bullets
 
     def format_context(self, max_bullets: int = 20) -> str:
@@ -198,3 +200,4 @@ class ContextCurator:
 
     def clear(self) -> None:
         self._bullets.clear()
+        self._save()

@@ -78,17 +78,23 @@ class WeaknessMiner:
 
     def ingest(self, traces: list[dict]) -> None:
         """Convert raw execution traces to structured FailureRecords."""
+        seen = {(r.task_id, r.timestamp) for r in self._all_records}
         for t in traces:
+            task_id = t.get("task_id", "unknown")
+            ts = t.get("timestamp", 0.0)
+            if (task_id, ts) in seen:
+                continue
             record = FailureRecord(
-                task_id=t.get("task_id", "unknown"),
+                task_id=task_id,
                 verifier_outcome=t.get("verifier_outcome", "unknown"),
                 causal_status=t.get("causal_status", "unknown"),
                 mechanism=t.get("mechanism", "unknown"),
                 trace_excerpt=t.get("trace", "")[:500],
-                timestamp=t.get("timestamp", 0.0),
+                timestamp=ts,
                 metadata=t.get("metadata", {}),
             )
             self._all_records.append(record)
+            seen.add((task_id, ts))
 
     def cluster_failures(self, traces: list[dict] | None = None) -> list[FailureCluster]:
         """Cluster failures by (mechanism, causal_status)."""

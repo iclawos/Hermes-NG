@@ -106,6 +106,7 @@ class LoopRunner(Generic[T]):
                     self._name, cycle.id, attempt + 1, self._max_retries + 1,
                     result.evidence,
                 )
+                self._curate_trajectory(cycle, "failure")
 
             except Exception as e:
                 cycle.error = str(e)
@@ -283,6 +284,9 @@ class MetaLoopRunner:
                             "duration_ms": cycle.duration_ms,
                         },
                     })
+            # Cap trace buffer to prevent unbounded growth
+            if len(self._traces) > 100:
+                self._traces = self._traces[-100:]
 
             # Harness evolution stage
             if self._mode == self.MODE_HARNESS_EVOLVE and self._orchestrator:

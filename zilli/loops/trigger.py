@@ -37,7 +37,12 @@ class EventTrigger(Trigger):
     async def wait(self) -> bool:
         self._start = time.monotonic()
         while True:
-            if self._check():
+            try:
+                triggered = self._check()
+            except Exception as e:
+                logger.error("EventTrigger check_fn raised: %s", e)
+                triggered = False
+            if triggered:
                 return True
             if self._timeout and (time.monotonic() - self._start) >= self._timeout:
                 logger.warning("EventTrigger timed out after %.1fs", self._timeout)

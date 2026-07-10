@@ -1,13 +1,20 @@
+import logging
+import os
 import re
 from typing import Dict, List, Optional
+
+from zilli.evolution.diversity import DiversityController
+
+logger = logging.getLogger(__name__)
 
 
 class SkillEvolutionEngine:
     def __init__(self, reflection_model: Optional[str] = None,
-                 cost_controller=None):
-        import os
+                 cost_controller=None,
+                 diversity_controller: Optional[DiversityController] = None):
         self.reflection_model = reflection_model or os.environ.get("ZILLI_REFLECTION_MODEL")
         self.cost_controller = cost_controller
+        self.diversity = diversity_controller or DiversityController()
         self.max_iterations = 10
         self.evolution_strategies = [
             "prompt_optimization",
@@ -26,24 +33,28 @@ class SkillEvolutionEngine:
         if self.cost_controller:
             self.cost_controller.record_planner_call("evolution", success)
             self._cost_log.append({"event": "planner_call", "success": success})
+            if len(self._cost_log) > 100:
+                self._cost_log = self._cost_log[-100:]
 
     def _record_executor(self, success: bool = True):
         if self.cost_controller:
             self.cost_controller.record_executor_call("evolution", success)
             self._cost_log.append({"event": "executor_call", "success": success})
+            if len(self._cost_log) > 100:
+                self._cost_log = self._cost_log[-100:]
 
     def _wrap_with_cost(self, skill_file: str, trajectory_data: List[Dict],
-                         strategy: str) -> str:
+                         strategy: str) -> tuple[str, Dict]:
         module = self._wrap_as_dspy_module(skill_file)
         if strategy and not self._check_budget():
             self._record_executor()
-            return self._generate_pr(module, skill_file, "executor_only")
+            return self._generate_pr(module, skill_file, "executor_only"), module
         reflections = self._reflect_on_trajectories(trajectory_data)
         optimized = self._apply_evolution(module, reflections, strategy)
         pr = self._generate_pr(optimized, skill_file, strategy)
         if strategy != "executor_only":
             self._record_planner()
-        return pr
+        return pr, optimized
 
     def evolve(self, skill_file: str, trajectory_data: List[Dict]) -> str:
         module = self._wrap_as_dspy_module(skill_file)
@@ -53,15 +64,32 @@ class SkillEvolutionEngine:
         reflections = self._reflect_on_trajectories(trajectory_data)
         strategy = self._select_strategy(module, reflections)
         optimized = self._apply_evolution(module, reflections, strategy)
+
+        source = optimized.get("improved_source") or module.get("source", "")
+        entry_id = f"{skill_file}::{self.diversity.diversity_metrics()['generation']}"
+        if source and not self.diversity.add_entry(entry_id, source, 0.5):
+            logger.info("Rejected %s — too similar to existing population", skill_file)
+            self._record_executor()
+            return self._generate_pr(module, skill_file, "diversity_rejected")
+
         pr = self._generate_pr(optimized, skill_file, strategy)
         self._record_planner()
+        self.diversity.log_diversity()
         return pr
 
     def evolve_multi_strategy(self, skill_file: str, trajectory_data: List[Dict]) -> List[str]:
         prs = []
         for strategy in self.evolution_strategies:
-            pr = self._wrap_with_cost(skill_file, trajectory_data, strategy)
+            pr, optimized = self._wrap_with_cost(skill_file, trajectory_data, strategy)
+            improved = optimized.get("improved_source") or optimized.get("source", "")
+            if improved:
+                entry_id = f"{skill_file}::{strategy}::{self.diversity.diversity_metrics()['generation']}"
+                if not self.diversity.add_entry(entry_id, improved, 0.3):
+                    prs.append(f"# Diversity rejected: {strategy}")
+                    continue
             prs.append(pr)
+        self.diversity.next_generation()
+        self.diversity.log_diversity()
         return prs
 
     def _wrap_as_dspy_module(self, skill_file: str) -> Dict:
@@ -114,53 +142,109 @@ class SkillEvolutionEngine:
         optimized["reflections"] = reflections
         optimized["strategy"] = strategy
         optimized["iterations"] = min(len(reflections) + 1, self.max_iterations)
-        optimized["dspy_integrated"] = True
+
+        source = module.get("source", "")
+        if not source:
+            return self._evolve_empty(optimized, strategy)
 
         if strategy == "prompt_optimization":
-            optimized["prompt_optimized"] = True
-            if module.get("source"):
-                lines = module["source"].split("\n")
-                improved = []
-                for i, line in enumerate(lines):
-                    if '"""' in line and 0 < i < len(lines) - 1:
-                        indent = line[:len(line) - len(line.lstrip())]
-                        improved.append(f"{indent}# DSPy-optimized prompt")
-                    improved.append(line)
-                optimized["improved_source"] = "\n".join(improved)
+            return self._evolve_prompt(optimized, source)
+        if strategy == "error_handling":
+            return self._evolve_error(optimized, source)
+        if strategy == "boundary_refinement":
+            return self._evolve_boundary(optimized, source)
 
-        elif strategy == "error_handling" and module.get("source"):
-            lines = module["source"].split("\n")
-            improved = []
-            for i, line in enumerate(lines):
+        return self._evolve_empty(optimized, strategy)
+
+    def _evolve_prompt(self, optimized: Dict, source: str) -> Dict:
+        optimized["prompt_optimized"] = True
+        lines = source.split("\n")
+        improved = []
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            indent = line[:len(line) - len(line.lstrip())]
+            if stripped.startswith('"""') or stripped.endswith('"""'):
                 improved.append(line)
-                stripped = line.strip()
-                if stripped.startswith("def ") and "error" not in stripped.lower():
-                    indent = " " * (len(line) - len(line.lstrip()) + 4)
-                    improved.append(f"{indent}try:")
-                    improved.append(f"{indent}    pass  # auto-evolved: wrap in try/except")
-                elif "pass" in stripped and i > 0:
-                    pass
-            optimized["improved_source"] = "\n".join(improved)
-            optimized["error_handling_added"] = True
+                if i > 0 and stripped.startswith('"""'):
+                    improved.append(f"{indent}# Prompt: optimize instruction clarity")
+            elif stripped.startswith("def ") and i > 1:
+                improved.append(line)
+                improved.append(f"{indent}    # TODO: add docstring and type hints")
+            else:
+                improved.append(line)
+        optimized["improved_source"] = "\n".join(improved)
+        return optimized
 
-        elif strategy == "boundary_refinement" and module.get("source"):
-            optimized["boundary_refined"] = True
-            if module.get("functions"):
-                optimized["boundary_info"] = (
-                    f"Functions: {', '.join(module['functions'][:5])}"
-                )
+    def _evolve_error(self, optimized: Dict, source: str) -> Dict:
+        optimized["error_handling_added"] = True
+        lines = source.split("\n")
+        improved = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            improved.append(line)
+            stripped = line.strip()
+            if stripped.startswith("def ") and "error" not in stripped.lower():
+                body_start = i + 1
+                while body_start < len(lines) and (
+                    not lines[body_start].strip()
+                    or lines[body_start].strip().startswith(('"""', "'''", "#"))
+                ):
+                    body_start += 1
+                if body_start < len(lines):
+                    body_indent = lines[body_start][:len(lines[body_start]) - len(lines[body_start].lstrip())]
+                    if not any(e in lines[min(body_start, len(lines)-1)] for e in ("try:", "except", "raise")):
+                        improved.append(f"{body_indent}try:")
+                        improved.append(lines[body_start])
+                        body_start += 1
+                        last_j = body_start
+                        for j in range(body_start, min(body_start + 5, len(lines))):
+                            if lines[j].strip() and not lines[j].strip().startswith(("def ", "class ", "@", "#")):
+                                improved.append(f"{body_indent}    {lines[j].lstrip()}")
+                                last_j = j
+                            else:
+                                break
+                        improved.append(f"{body_indent}except Exception:")
+                        improved.append(f"{body_indent}    pass")
+                        i = last_j
+            i += 1
+        optimized["improved_source"] = "\n".join(improved)
+        return optimized
 
-        elif strategy == "tool_addiction":
+    def _evolve_boundary(self, optimized: Dict, source: str) -> Dict:
+        optimized["boundary_refined"] = True
+        lines = source.split("\n")
+        improved = []
+        for i, line in enumerate(lines):
+            improved.append(line)
+            stripped = line.strip()
+            indent = line[:len(line) - len(line.lstrip())]
+            if stripped.startswith("def ") and "def " in source:
+                params = stripped[len("def "):]
+                fn_name = params.split("(")[0].strip() if "(" in params else ""
+                if fn_name:
+                    improved.append(f"{indent}    # Guard: validate inputs for {fn_name}")
+                    if "None" in source:
+                        improved.append(f"{indent}    # Guard: check for None inputs")
+                    if "int" in source or "float" in source:
+                        improved.append(f"{indent}    # Guard: validate numeric bounds")
+        optimized["improved_source"] = "\n".join(improved)
+        if optimized.get("functions"):
+            optimized["boundary_info"] = (
+                f"Functions: {', '.join(optimized['functions'][:5])}"
+            )
+        return optimized
+
+    def _evolve_empty(self, optimized: Dict, strategy: str) -> Dict:
+        if strategy == "tool_addiction":
             optimized["tool_addicted"] = True
-            if not module.get("source"):
-                fn_name = "evolved_skill"
-                optimized["improved_source"] = (
-                    f"def {fn_name}(input: str) -> str:\n"
-                    f'    """Auto-evolved by Zilli (DSPy + GEPA)."""\n'
-                    f"    return f\"Processed: {{input}}\"\n"
-                )
-                optimized["functions"] = [fn_name]
-
+            fn_name = "evolved_skill"
+            optimized["improved_source"] = (
+                f"def {fn_name}(input: str) -> str:\n"
+                f'    """Auto-evolved by Zilli."""\n'
+                f"    return f\"Processed: {{input}}\"\n"
+            )
+            optimized["functions"] = [fn_name]
         return optimized
 
     def _generate_pr(self, optimized: Dict, skill_file: str,

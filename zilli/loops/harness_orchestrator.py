@@ -185,7 +185,7 @@ class HarnessOrchestrator:
 
         candidate.held_in_pass_rate = (
             sum(held_in_results) / len(held_in_results)
-            if held_in_results else 0.0
+            if held_in_results else 1.0
         )
 
         held_out_results: list[bool] = []
@@ -198,11 +198,12 @@ class HarnessOrchestrator:
 
         candidate.held_out_pass_rate = (
             sum(held_out_results) / len(held_out_results)
-            if held_out_results else 0.0
+            if held_out_results else 1.0
         )
 
-        prev_pass_rate = 0.0
-        if self._history:
+        if not self._history:
+            prev_pass_rate = self._history[-1].held_in_pass_rate if self._history else 0.0
+        else:
             prev_pass_rate = self._history[-1].held_in_pass_rate
 
         improvement = candidate.held_in_pass_rate - prev_pass_rate
@@ -210,10 +211,7 @@ class HarnessOrchestrator:
             self._history[-1].held_out_pass_rate if self._history else 1.0
         )
 
-        candidate.accepted = (
-            improvement >= self._threshold
-            and not regression
-        )
+        candidate.accepted = improvement >= self._threshold and not regression
 
         for edit in candidate.edits:
             edit.accepted = candidate.accepted
