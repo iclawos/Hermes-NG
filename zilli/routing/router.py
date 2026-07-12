@@ -9,6 +9,7 @@ from zilli.models.base import GenerationResult
 from zilli.models.config import ModelRole
 from zilli.models.registry import ModelRegistry
 from zilli.routing.classifier import RouteClassifier, RouteDecision, RouteType
+from zilli.routing.mom_router import MOMRouter
 from zilli.security.sanitizer import InputSanitizer, safe_format
 
 if TYPE_CHECKING:
@@ -99,12 +100,14 @@ class LocalHybridRouter:
         config: Optional["ZilliConfig"] = None,
         cache: Optional["CacheEngine"] = None,
         planner_budget: Optional[PlannerBudget] = None,
+        mom_router: Optional["MOMRouter"] = None,
     ):
         self.registry = registry
         self.config = config
         self.cache = cache
         self.sanitizer = InputSanitizer()
         self.planner_budget = planner_budget or PlannerBudget()
+        self.mom_router = mom_router
 
         if classifier is not None:
             self.classifier = classifier
