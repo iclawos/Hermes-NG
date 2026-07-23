@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -71,6 +72,7 @@ def main():
     train_parser.add_argument("--cost-aware", action="store_true", help="启用成本控制调度")
     train_parser.add_argument("--budget", type=float, default=None, help="月度预算上限（美元）")
     train_parser.add_argument("--dry-run", action="store_true", help="模拟运行，不执行实际训练")
+    train_parser.add_argument("--resume", type=str, default="", help="从检查点恢复训练（检查点路径）")
 
     distill_parser = sub.add_parser("distill", help="运行蒸馏循环")
     distill_parser.add_argument("--config", type=str, default=None, help="蒸馏配置YAML路径")
@@ -98,6 +100,42 @@ def main():
     serve_parser = sub.add_parser("serve", help="启动 API 服务器")
     serve_parser.add_argument("--host", type=str, default="127.0.0.1", help="监听地址")
     serve_parser.add_argument("--port", type=int, default=8900, help="监听端口")
+
+    pipeline_parser = sub.add_parser("pipeline", help="端到端进化训练管线")
+    pipeline_parser.add_argument("--skills-dir", type=str, default="",
+                                 help="待进化技能目录")
+    pipeline_parser.add_argument("--trajectories-dir", type=str, default="",
+                                 help="轨迹数据目录")
+    pipeline_parser.add_argument("--epochs", type=int, default=5,
+                                 help="训练轮数")
+    pipeline_parser.add_argument("--cycles", type=int, default=3,
+                                 help="管线循环次数")
+    pipeline_parser.add_argument("--log-dir", type=str, default="./experiments",
+                                 help="日志目录")
+
+    ppm_parser = sub.add_parser("ppm", help="PPM 预测路由管理")
+    ppm_sub = ppm_parser.add_subparsers(dest="ppm_command")
+    ppm_sub.add_parser("stats", help="显示 PPM 统计信息")
+    ppm_train = ppm_sub.add_parser("train-model", help="训练 sklearn/ONNX 分类模型")
+    ppm_train.add_argument("--records", type=str, required=True,
+                           help="训练记录 JSON 文件路径")
+    ppm_train.add_argument("--output", type=str, default="ppm_model.onnx",
+                           help="模型输出路径")
+    ppm_train.add_argument("--classifier", type=str, default="sklearn",
+                           choices=["sklearn"], help="分类器类型")
+
+    audit_parser = sub.add_parser("audit", help="审计与合规")
+    audit_sub = audit_parser.add_subparsers(dest="audit_command")
+    audit_export = audit_sub.add_parser("export", help="导出合规报告")
+    audit_export.add_argument("--framework", type=str, required=True,
+                              choices=["gdpr", "hipaa", "soc2", "pci_dss", "ferpa", "ccpa"],
+                              help="合规框架")
+    audit_export.add_argument("--tenant", type=str, default="default", help="租户ID")
+    audit_export.add_argument("--start", type=str, required=True, help="开始日期 (YYYY-MM-DD)")
+    audit_export.add_argument("--end", type=str, required=True, help="结束日期 (YYYY-MM-DD)")
+    audit_export.add_argument("--output", type=str, required=True, help="输出文件路径")
+    audit_export.add_argument("--audit-dir", type=str, default="./audit_logs",
+                              help="审计日志目录")
 
     args = parser.parse_args()
 
@@ -156,7 +194,8 @@ def main():
         _run_evaluation(task_id=args.task_id, cost_aware=args.cost_aware, budget=args.budget, zilli_config=zilli_config)
 
     elif args.command == "train":
-        _run_train(args.config, cost_aware=args.cost_aware, budget=args.budget, zilli_config=zilli_config)
+        _run_train(args.config, cost_aware=args.cost_aware, budget=args.budget,
+                    zilli_config=zilli_config, resume=args.resume)
 
     elif args.command == "distill":
         _run_distill(
@@ -179,11 +218,18 @@ def main():
             config_path=Path(args.zilli_config) if args.zilli_config else None,
         )
 
+    elif args.command == "pipeline":
+        _run_pipeline(args)
+    elif args.command == "ppm":
+        _run_ppm(args)
+    elif args.command == "audit":
+        _run_audit(args)
+
     else:
         parser.print_help()
 
 
-def _run_models(cmd: str = None, args: argparse.Namespace = None,
+def _run_models(cmd: str | None = None, args: argparse.Namespace | None = None,
                 zilli_config: Optional["ZilliConfig"] = None):
     from zilli.models import ModelRegistry, ModelRole
 
@@ -361,7 +407,7 @@ def _run_industry(args: argparse.Namespace,
         asyncio.run(_run())
 
 
-def _run_cost(cmd: str = None,
+def _run_cost(cmd: str | None = None,
               zilli_config: Optional["ZilliConfig"] = None):
     from zilli.envs.cost_controller import CostController
 
@@ -435,7 +481,7 @@ def _run_sandbox_test():
     asyncio.run(test())
 
 
-def _run_evaluation(task_id: str = None, cost_aware: bool = False, budget: float = None,
+def _run_evaluation(task_id: str | None = None, cost_aware: bool = False, budget: float | None = None,
                     zilli_config: Optional["ZilliConfig"] = None):
     import asyncio
 
@@ -523,8 +569,9 @@ def _run_evaluation(task_id: str = None, cost_aware: bool = False, budget: float
     asyncio.run(evaluate())
 
 
-def _run_train(config_path: str = None, cost_aware: bool = False, budget: float = None,
-               zilli_config: Optional["ZilliConfig"] = None, dry_run: bool = False):
+def _run_train(config_path: str | None = None, cost_aware: bool = False, budget: float | None = None,
+               zilli_config: Optional["ZilliConfig"] = None, dry_run: bool = False,
+               resume: str = ""):
     from zilli.training.config import TrainingConfig
     from zilli.training.data import make_dummy_failure, make_dummy_golden
 
@@ -640,8 +687,90 @@ def _run_swe(args: argparse.Namespace):
     asyncio.run(run())
 
 
-def _run_distill(config_path: str = None, num_samples: int = 100,
-                  checkpoint_path: str = None, ab_test_path: str = None,
+def _run_audit(args: argparse.Namespace):
+    if args.audit_command == "export":
+        from zilli.audit.compliance import ComplianceReporter
+
+        reporter = ComplianceReporter(audit_dir=args.audit_dir)
+        report = reporter.generate(
+            framework=args.framework,
+            tenant_id=args.tenant,
+            period_start=args.start,
+            period_end=args.end,
+        )
+        reporter.export_json(report, args.output)
+        status = "PASS" if report.passed else "FAIL"
+        print(f"Compliance report [{args.framework}] {status}")
+        print(f"  Total requests: {report.total_requests}")
+        print(f"  Cloud: {report.cloud_requests} | Local: {report.local_requests}")
+        print(f"  Sanitized: {report.sanitized_requests} | Rejected: {report.rejected_requests}")
+        print(f"  PII detected: {report.pii_detected_count}")
+        print(f"  Consent violations: {report.consent_violations}")
+        print(f"  Findings: {len(report.findings)}")
+        print(f"  Exported to: {args.output}")
+
+
+def _run_ppm(args: argparse.Namespace):
+    if args.ppm_command == "stats":
+        from zilli.routing.ppm import PPMPredictor
+        p = PPMPredictor()
+        print(json.dumps(p.stats(), indent=2, default=str))
+
+    elif args.ppm_command == "train-model":
+        records_path = Path(args.records)
+        if not records_path.exists():
+            print(f"Records file not found: {args.records}")
+            return
+        with open(records_path) as f:
+            records = json.load(f)
+        from zilli.routing.ppm_classifier import train_classifier
+        result = train_classifier(records, output_path=args.output, classifier_type=args.classifier)
+        print(json.dumps(result, indent=2))
+        print(f"Model saved to: {args.output}")
+
+
+def _run_pipeline(args: argparse.Namespace):
+    import asyncio
+
+    from zilli.evolution.diversity import DiversityController
+    from zilli.evolution.skill_evolution import SkillEvolutionEngine
+    from zilli.pipeline.evolve_to_train import EvolveToTrainPipeline, EvolveTrainConfig
+    from zilli.training.rl_trainer import RLTrainer
+
+    async def run():
+        config = EvolveTrainConfig(
+            skills_dir=args.skills_dir,
+            trajectories_dir=args.trajectories_dir,
+            num_train_epochs=args.epochs,
+            log_dir=args.log_dir,
+            max_cycles=args.cycles,
+        )
+
+        diversity = DiversityController()
+        engine = SkillEvolutionEngine(diversity_controller=diversity)
+        trainer = RLTrainer({})
+        pipeline = EvolveToTrainPipeline(
+            config=config,
+            evolution_engine=engine,
+            trainer=trainer,
+        )
+
+        for cycle in range(args.cycles):
+            print(f"\n=== Cycle {cycle + 1}/{args.cycles} ===")
+            records = await pipeline.run_cycle()
+            for r in records:
+                status = "✅" if r.success else "❌"
+                print(f"  {status} {r.stage.value:8s} | {r.message}")
+            print(f"  Summary: champion={pipeline.summary()['champion_model']}")
+
+        print("\n=== Pipeline Complete ===")
+        print(json.dumps(pipeline.summary(), indent=2))
+
+    asyncio.run(run())
+
+
+def _run_distill(config_path: str | None = None, num_samples: int = 100,
+                  checkpoint_path: str | None = None, ab_test_path: str | None = None,
                   log_dir: str = ""):
     from zilli.infra.device_utils import set_device
     from zilli.training.distillation import DistillationSample, DistillationScheduler

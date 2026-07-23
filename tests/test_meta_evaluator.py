@@ -49,7 +49,7 @@ class TestMetaEvaluator:
         corrected = me.correct_prediction(0.9)
         assert abs(corrected - 0.7) < 0.05
 
-    def test_no_drift_with稳定的数据(self):
+    def test_no_drift_with_stable_data(self):
         me = MetaEvaluator(window_size=10)
         for i in range(30):
             me.record(EvaluationSample(

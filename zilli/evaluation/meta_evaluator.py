@@ -29,16 +29,37 @@ class MetaEvaluationResult:
     variance: float
     sample_count: int
     reliable: bool
+    posterior_mean: float = 0.0
+    posterior_std: float = 0.0
     details: dict[str, Any] = field(default_factory=dict)
 
 
 class MetaEvaluator:
-    def __init__(self, window_size: int = 100, reliability_threshold: float = 0.15):
+    """Meta-evaluator with Bayesian posterior estimation.
+
+    Uses a Gaussian prior and conjugate update to estimate the
+    true error distribution. This replaces simple bias/variance
+    statistics with a principled Bayesian approach that handles
+    small sample sizes gracefully.
+    """
+
+    def __init__(
+        self,
+        window_size: int = 100,
+        reliability_threshold: float = 0.15,
+        prior_mean: float = 0.0,
+        prior_std: float = 0.5,
+        likelihood_std: float = 0.1,
+    ):
         self.window_size = window_size
         self.reliability_threshold = reliability_threshold
         self._history: list[EvaluationSample] = []
         self._weights: dict[str, float] = {}
         self._bias_correction: float = 0.0
+
+        self._prior_mean = prior_mean
+        self._prior_std = prior_std
+        self._likelihood_std = likelihood_std
 
     def record(self, sample: EvaluationSample) -> None:
         self._history.append(sample)
@@ -55,40 +76,73 @@ class MetaEvaluator:
                 variance=0.0,
                 sample_count=0,
                 reliable=False,
+                posterior_mean=self._prior_mean,
+                posterior_std=self._prior_std,
             )
 
         predicted = np.array([s.predicted_score for s in samples])
         actual = np.array([s.actual_score for s in samples])
+        errors = predicted - actual
         n = len(samples)
 
-        bias = float(np.mean(predicted - actual))
-        variance = float(np.var(predicted - actual))
-        mse = float(np.mean((predicted - actual) ** 2))
+        sample_mean = float(np.mean(errors))
+        sample_var = float(np.var(errors, ddof=1)) if n > 1 else 0.0
+
+        posterior_mean, posterior_std = self._bayesian_update(
+            sample_mean, sample_var, n
+        )
+
+        mse = float(np.mean(errors ** 2))
         calibration_error = math.sqrt(mse) if mse > 0 else 0.0
 
-        se = math.sqrt(variance / n) if n > 1 else 0.0
-        ci_lower = bias - 1.96 * se
-        ci_upper = bias + 1.96 * se
+        ci_lower = posterior_mean - 1.96 * posterior_std
+        ci_upper = posterior_mean + 1.96 * posterior_std
 
-        reliable = calibration_error < self.reliability_threshold and n >= 10
+        reliable = (
+            calibration_error < self.reliability_threshold
+            and n >= 10
+            and posterior_std < 0.3
+        )
 
-        self._bias_correction = bias
+        self._bias_correction = posterior_mean
 
         per_model: dict[str, list[float]] = {}
         for s in samples:
-            per_model.setdefault(s.model_name, []).append(abs(s.predicted_score - s.actual_score))
-
+            per_model.setdefault(s.model_name, []).append(
+                abs(s.predicted_score - s.actual_score)
+            )
         model_errors = {m: float(np.mean(errs)) for m, errs in per_model.items()}
 
         return MetaEvaluationResult(
             calibration_error=round(calibration_error, 4),
             confidence_interval=(round(ci_lower, 4), round(ci_upper, 4)),
-            bias=round(bias, 4),
-            variance=round(variance, 4),
+            bias=round(posterior_mean, 4),
+            variance=round(posterior_std ** 2, 4),
             sample_count=n,
             reliable=reliable,
+            posterior_mean=round(posterior_mean, 4),
+            posterior_std=round(posterior_std, 4),
             details={"model_errors": model_errors},
         )
+
+    def _bayesian_update(
+        self, sample_mean: float, sample_var: float, n: int
+    ) -> tuple[float, float]:
+        """Conjugate Gaussian update: prior ~ N(prior_mean, prior_std²),
+        likelihood ~ N(sample_mean, sample_var/n).
+        """
+        prior_var = self._prior_std ** 2
+        likelihood_var = sample_var / n if n > 0 else self._likelihood_std ** 2
+
+        if likelihood_var <= 0:
+            likelihood_var = self._likelihood_std ** 2
+
+        posterior_var = 1.0 / (1.0 / prior_var + 1.0 / likelihood_var)
+        posterior_mean = posterior_var * (
+            self._prior_mean / prior_var + sample_mean / likelihood_var
+        )
+
+        return posterior_mean, math.sqrt(posterior_var)
 
     def correct_prediction(self, raw_score: float, model_name: str = "") -> float:
         return raw_score - self._bias_correction
@@ -128,6 +182,8 @@ class MetaEvaluator:
             "variance": result.variance,
             "reliable": result.reliable,
             "sample_count": result.sample_count,
+            "posterior_mean": result.posterior_mean,
+            "posterior_std": result.posterior_std,
             "drift_detected": self.detect_drift(),
             "feature_importance": self.feature_importance(),
         }

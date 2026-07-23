@@ -52,10 +52,11 @@ class TrainingExperiment:
             "experiment": self.name,
             "tag": tag,
             "timestamp": time.time(),
+            "start_time": self.start_time,
             "config_hash": config_hash,
             "epoch": len(self.metrics),
             "best_reward": self.best_reward,
-            "metrics": self.metrics[-10:] if self.metrics else [],
+            "metrics": self.metrics if self.metrics else [],
         }
         if extra:
             ckpt.update(extra)
@@ -63,6 +64,33 @@ class TrainingExperiment:
         with open(ckpt_path, "w") as f:
             json.dump(ckpt, f, indent=2)
         logger.info("Checkpoint saved: %s", ckpt_path)
+
+    @classmethod
+    def load_checkpoint(cls, ckpt_path: str) -> dict:
+        p = Path(ckpt_path).resolve()
+        if not p.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+        with open(p) as f:
+            ckpt = json.load(f)
+        return ckpt
+
+    @classmethod
+    def resume_from(
+        cls,
+        ckpt_path: str,
+        config: Dict[str, Any],
+        log_dir: str = "./experiments",
+    ) -> tuple["TrainingExperiment", int]:
+        ckpt = cls.load_checkpoint(ckpt_path)
+        name = ckpt.get("experiment", "resumed")
+        exp = cls(name, config, log_dir)
+        exp.metrics = ckpt.get("metrics", [])
+        exp.best_reward = ckpt.get("best_reward", float("-inf"))
+        exp.start_time = ckpt.get("start_time", time.time())
+        resume_epoch = len(exp.metrics)
+        logger.info("Resuming experiment '%s' from epoch %d", name, resume_epoch)
+        exp.log_epoch(resume_epoch, {"resumed": True, "from_checkpoint": ckpt_path})
+        return exp, resume_epoch
 
     def summary(self) -> Dict[str, Any]:
         return {
@@ -129,7 +157,7 @@ async def run_rollout(sandbox: HermesSandbox, task: Dict) -> Dict:
     }
 
 
-async def main(config_path: str = None, experiment_name: str = "zilli_default"):
+async def main(config_path: str = None, experiment_name: str = "zilli_default", resume: str = ""):
     base = Path(__file__).parent
     cfg_path = Path(config_path).resolve() if config_path else base / "configs" / "training_config.yaml"
     if not cfg_path.exists():
@@ -155,7 +183,13 @@ async def main(config_path: str = None, experiment_name: str = "zilli_default"):
     )
     length_controller = LengthElasticController()
     trainer = RLTrainer(training_config)
-    experiment = TrainingExperiment(experiment_name, training_config, log_dir)
+    if resume:
+        experiment, start_epoch = TrainingExperiment.resume_from(
+            resume, training_config, log_dir,
+        )
+    else:
+        experiment = TrainingExperiment(experiment_name, training_config, log_dir)
+        start_epoch = 0
 
     distill_config = training_config.get("distillation", {})
     distill_scheduler = DistillationScheduler(
@@ -195,7 +229,7 @@ async def main(config_path: str = None, experiment_name: str = "zilli_default"):
         experiment_name, num_epochs, len(tasks), batch_size,
     )
 
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         batch_tasks = tasks[:8] if len(tasks) > 8 else tasks
 
         async def sota_aware_rollout(task: Dict) -> Dict:

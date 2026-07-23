@@ -18,11 +18,13 @@ class DynamicSOTAScheduler:
     def __init__(
         self,
         monthly_budget_usd: float = 500.0,
-        cost_per_call: Dict[str, float] = None,
+        cost_per_call: Dict[str, float] | None = None,
         model_registry: Optional[ModelRegistry] = None,
         config: Optional["ZilliConfig"] = None,
+        max_sota_ratio: float = 0.05,
     ):
         self.model_registry = model_registry
+        self.max_sota_ratio = max_sota_ratio
 
         if config is not None:
             profile = config.to_model_profile()
@@ -93,6 +95,9 @@ class DynamicSOTAScheduler:
         if not self._planner_available():
             return False
 
+        if self._sota_ratio_exceeded():
+            return False
+
         difficulty = self.task_stats[task_type]["failure_rate"]
         gap = self._performance_gap(task_type)
         conf = self._executor_confidence(executor_state)
@@ -114,6 +119,12 @@ class DynamicSOTAScheduler:
             return True
 
         return conf < threshold
+
+    def _sota_ratio_exceeded(self) -> bool:
+        if self.total_calls == 0:
+            return False
+        ratio = self.calls_this_hour / max(self.total_calls, 1)
+        return ratio > self.max_sota_ratio
 
     def record_call(self, model_name: str, task_type: str,
                     actual_success: bool):

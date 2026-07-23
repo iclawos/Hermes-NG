@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zilli"
-version = "0.3.0"
+version = "0.5.0"
 description = "Zilli: self-evolving AI agent framework for autonomous tool development"
 readme = "README.md"
 license = {text = "MIT"}
@@ -18,11 +18,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.5",
     "pyyaml>=6.0",
@@ -53,8 +53,13 @@ dev = [
     "ruff>=0.3",
     "httpx>=0.27",
 ]
+ppm = [
+    "scikit-learn>=1.5",
+    "onnxruntime>=1.20",
+    "skl2onnx>=1.17",
+]
 all = [
-    "zilli[train,server,workflow,vector,dev]",
+    "zilli[train,server,workflow,vector,dev,ppm]",
 ]
 
 [project.urls]
@@ -75,7 +80,15 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
+
+[tool.pyright]
+typeCheckingMode = "standard"
+include = ["zilli"]
+exclude = ["tests", "**/__pycache__"]
+reportMissingTypeStubs = false
+reportMissingModuleSource = true
+reportPossiblyUnboundVariable = false
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N"]

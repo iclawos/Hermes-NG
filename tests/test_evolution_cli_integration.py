@@ -5,6 +5,11 @@ from pathlib import Path
 
 from zilli.evolution import SkillEvolutionEngine
 from zilli.evolution.diversity import DiversityController
+from zilli.routing.feedback import FeedbackCollector
+from zilli.routing.mom_router import MOMRouter
+from zilli.routing.ppm import PPMPredictor
+from zilli.routing.profile import ModelCapability, ModelEntry, ModelProfile
+from zilli.routing.strategy import StrategySelector
 
 
 def test_cli_integration_single_strategy(tmp_path: Path):
@@ -76,3 +81,71 @@ def test_cli_integration_diversity_rejection(tmp_path: Path):
     engine = SkillEvolutionEngine(diversity_controller=dc)
     pr = engine.evolve(str(skill_file), trajectory_data=[])
     assert "Diversity Rejected" in pr
+
+
+def test_harness_mode_with_mom_router(tmp_path: Path):
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    skill_file = skills_dir / "harness_skill.py"
+    skill_file.write_text("def process():\n    return 0\n")
+
+    ppm = PPMPredictor()
+    profile = ModelProfile(exploration_factor=0.0)
+    profile.register(ModelEntry(
+        name="cheap", model_id="fast-cheap",
+        cost_per_1k_input=0.0005, cost_per_1k_output=0.001,
+        capability=ModelCapability(reasoning=0.3, coding=0.2),
+    ))
+    strategy = StrategySelector()
+    feedback = FeedbackCollector()
+    router = MOMRouter(ppm=ppm, profile=profile, strategy=strategy, feedback=feedback)
+
+    engine = SkillEvolutionEngine(
+        mode="harness",
+        mom_router=router,
+        reflection_model="default-model",
+    )
+    pr = engine.evolve(str(skill_file), trajectory_data=[
+        {"observation": {"error": "ValueError"}},
+    ])
+    assert "Auto-evolved" in pr
+
+
+def test_harness_mode_fallback_without_router(tmp_path: Path):
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    skill_file = skills_dir / "fallback.py"
+    skill_file.write_text("def run():\n    return 0\n")
+
+    engine = SkillEvolutionEngine(mode="harness", mom_router=None)
+    pr = engine.evolve(str(skill_file), trajectory_data=[
+        {"observation": {"error": "KeyError"}},
+    ])
+    assert "Auto-evolved" in pr
+
+
+def test_harness_mode_records_feedback(tmp_path: Path):
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    skill_file = skills_dir / "feedback_test.py"
+    skill_file.write_text("def compute():\n    return 42\n")
+
+    ppm = PPMPredictor()
+    profile = ModelProfile(exploration_factor=0.0)
+    profile.register(ModelEntry(
+        name="cheap", model_id="test-model",
+        cost_per_1k_input=0.001, cost_per_1k_output=0.002,
+        capability=ModelCapability(reasoning=0.5, coding=0.5),
+    ))
+    strategy = StrategySelector()
+    feedback = FeedbackCollector()
+    router = MOMRouter(ppm=ppm, profile=profile, strategy=strategy, feedback=feedback)
+
+    engine = SkillEvolutionEngine(
+        mode="harness",
+        mom_router=router,
+    )
+    engine.evolve(str(skill_file), trajectory_data=[
+        {"observation": {"error": "TypeError"}},
+    ])
+    assert "cache_size" in ppm.stats()

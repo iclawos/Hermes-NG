@@ -107,10 +107,32 @@ def main():
         population_size=50,
         novelty_threshold=args.diversity_threshold,
     )
+
+    mom_router = None
+    if args.mode == "harness":
+        try:
+            from zilli.routing.mom_router import MOMRouter
+            from zilli.routing.ppm import PPMPredictor
+            from zilli.routing.profile import ModelProfile
+            from zilli.routing.strategy import StrategySelector
+
+            ppm = PPMPredictor()
+            profile = ModelProfile()
+            strategy = StrategySelector()
+            mom_router = MOMRouter(
+                ppm=ppm,
+                profile=profile,
+                strategy=strategy,
+                budget_provider=lambda: 0.5,
+            )
+        except ImportError as e:
+            print(f"Warning: MOMRouter not available for harness mode: {e}", file=sys.stderr)
+
     engine = SkillEvolutionEngine(
         reflection_model=args.reflection_model,
         diversity_controller=diversity,
         mode=args.mode,
+        mom_router=mom_router,
     )
     engine.max_iterations = args.max_iterations
 

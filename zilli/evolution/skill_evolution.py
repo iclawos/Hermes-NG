@@ -1,7 +1,8 @@
+import asyncio
 import logging
 import os
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from zilli.evolution.diversity import DiversityController
 
@@ -12,11 +13,13 @@ class SkillEvolutionEngine:
     def __init__(self, reflection_model: Optional[str] = None,
                  cost_controller=None,
                  diversity_controller: Optional[DiversityController] = None,
-                 mode: str = "evolve"):
+                 mode: str = "evolve",
+                 mom_router: Optional[Any] = None):
         self.reflection_model = reflection_model or os.environ.get("ZILLI_REFLECTION_MODEL")
         self.cost_controller = cost_controller
         self.diversity = diversity_controller or DiversityController()
         self.mode = mode
+        self.mom_router = mom_router
         self.max_iterations = 10
         self.evolution_strategies = [
             "prompt_optimization",
@@ -63,6 +66,24 @@ class SkillEvolutionEngine:
         if not self._check_budget():
             self._record_executor()
             return self._generate_pr(module, skill_file, "executor_only")
+
+        if self.mode == "harness" and self.mom_router:
+            route_text = f"{skill_file} evolution"
+            try:
+                loop = asyncio.get_running_loop()
+                decision = asyncio.run_coroutine_threadsafe(
+                    self.mom_router.route(route_text), loop,
+                ).result(timeout=5)
+                self.reflection_model = decision.model_id
+            except RuntimeError:
+                try:
+                    decision = asyncio.run(self.mom_router.route(route_text))
+                    self.reflection_model = decision.model_id
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
         reflections = self._reflect_on_trajectories(trajectory_data)
         strategy = self._select_strategy(module, reflections)
         optimized = self._apply_evolution(module, reflections, strategy)
@@ -77,6 +98,23 @@ class SkillEvolutionEngine:
         pr = self._generate_pr(optimized, skill_file, strategy)
         self._record_planner()
         self.diversity.log_diversity()
+
+        if self.mode == "harness" and self.mom_router:
+            try:
+                self.mom_router.record_feedback(
+                    request_id=f"evolve::{skill_file}",
+                    ppm_difficulty=0.5,
+                    ppm_family="coding",
+                    selected_model=self.reflection_model or "default",
+                    strategy_tier="standard",
+                    actual_latency_ms=0,
+                    actual_cost=0,
+                    success=("diversity_rejected" not in pr),
+                    score=0.7 if "diversity_rejected" not in pr else 0.3,
+                )
+            except Exception:
+                pass
+
         return pr
 
     def evolve_multi_strategy(self, skill_file: str, trajectory_data: List[Dict]) -> List[str]:
@@ -93,6 +131,62 @@ class SkillEvolutionEngine:
         self.diversity.next_generation()
         self.diversity.log_diversity()
         return prs
+
+    async def evolve_async(self, skill_file: str, trajectory_data: List[Dict]) -> str:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None, self.evolve, skill_file, trajectory_data,
+        )
+
+    async def evolve_concurrent(
+        self,
+        skill_files: List[str],
+        trajectory_data: List[Dict],
+        max_concurrency: int = 4,
+    ) -> Dict[str, str]:
+        sem = asyncio.Semaphore(max_concurrency)
+        results: Dict[str, str] = {}
+
+        async def _evolve_one(sf: str) -> tuple[str, str]:
+            async with sem:
+                pr = await self.evolve_async(sf, trajectory_data)
+                return sf, pr
+
+        tasks = [_evolve_one(sf) for sf in skill_files]
+        for coro in asyncio.as_completed(tasks):
+            sf, pr = await coro
+            results[sf] = pr
+        return results
+
+    async def evolve_multi_strategy_async(
+        self,
+        skill_file: str,
+        trajectory_data: List[Dict],
+    ) -> List[str]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None, self.evolve_multi_strategy, skill_file, trajectory_data,
+        )
+
+    async def evolve_multi_strategy_concurrent(
+        self,
+        skill_files: List[str],
+        trajectory_data: List[Dict],
+        max_concurrency: int = 4,
+    ) -> Dict[str, List[str]]:
+        sem = asyncio.Semaphore(max_concurrency)
+        results: Dict[str, List[str]] = {}
+
+        async def _evolve_one(sf: str) -> tuple[str, List[str]]:
+            async with sem:
+                prs = await self.evolve_multi_strategy_async(sf, trajectory_data)
+                return sf, prs
+
+        tasks = [_evolve_one(sf) for sf in skill_files]
+        for coro in asyncio.as_completed(tasks):
+            sf, prs = await coro
+            results[sf] = prs
+        return results
 
     def _wrap_as_dspy_module(self, skill_file: str) -> Dict:
         try:
@@ -128,6 +222,16 @@ class SkillEvolutionEngine:
                             reflections.append(f"Error: {err}")
                             break
         return reflections[:10]
+
+    def _route_reflection(self, reflections: list[str]) -> str:
+        if self.mode == "harness" and self.mom_router and reflections:
+            text = " ".join(reflections)
+            try:
+                decision = asyncio.run(self.mom_router.route(text))
+                return decision.model_id or self.reflection_model or "default"
+            except Exception:
+                pass
+        return self.reflection_model or "default"
 
     def _select_strategy(self, module: Dict, reflections: List[str]) -> str:
         if not module.get("source"):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import threading
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,7 +52,6 @@ class FeedbackCollector:
         self._buffer: list[FeedbackRecord] = []
         self._path = Path(persist_path) if persist_path else None
         self._running = False
-        self._lock = threading.Lock()
 
     async def start(self) -> None:
         self._running = True
@@ -115,12 +114,20 @@ class FeedbackCollector:
             logger.debug("Failed to persist feedback: %s", e)
 
 
+_SCORE_RE = re.compile(r"Rating:\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
 class FeedbackEvaluator:
     def __init__(
         self,
         rating_prompt: Optional[str] = None,
+        llm_score_cache_size: int = 256,
     ):
         self._rating_prompt = rating_prompt or _DEFAULT_RATING_PROMPT
+        self._llm_call_count = 0
+        self._llm_fallback_count = 0
+        self._llm_score_cache: dict[int, float] = {}
+        self._llm_cache_size = llm_score_cache_size
 
     def auto_score(self, request: str, response: str) -> float:
         request_len = len(request)
@@ -139,3 +146,51 @@ class FeedbackEvaluator:
         score += min(response_len / 5000, 0.15)
 
         return max(0.0, min(1.0, score))
+
+    async def llm_score(
+        self,
+        request: str,
+        response: str,
+        llm_generate: callable,
+    ) -> float:
+        cache_key = hash((request[:200].lower(), response[:200].lower()))
+        cached = self._llm_score_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        prompt = self._rating_prompt.format(request=request, response=response)
+        try:
+            result = await llm_generate(prompt)
+            if result and hasattr(result, "text"):
+                text = result.text
+            elif isinstance(result, str):
+                text = result
+            else:
+                self._llm_fallback_count += 1
+                return self.auto_score(request, response)
+
+            match = _SCORE_RE.search(text)
+            if match:
+                score = float(match.group(1))
+                score = max(0.0, min(1.0, score))
+                self._llm_call_count += 1
+                self._cache_llm_score(cache_key, score)
+                return score
+
+            self._llm_fallback_count += 1
+            return self.auto_score(request, response)
+        except Exception:
+            self._llm_fallback_count += 1
+            return self.auto_score(request, response)
+
+    def _cache_llm_score(self, key: int, score: float) -> None:
+        if len(self._llm_score_cache) >= self._llm_cache_size:
+            self._llm_score_cache.clear()
+        self._llm_score_cache[key] = score
+
+    def stats(self) -> dict:
+        return {
+            "llm_calls": self._llm_call_count,
+            "llm_fallbacks": self._llm_fallback_count,
+            "llm_cache_size": len(self._llm_score_cache),
+        }

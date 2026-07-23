@@ -61,3 +61,78 @@ class TestFeedbackEvaluator:
         short = ev.auto_score("Q", "A")
         long_ = ev.auto_score("Q", "A" * 1000)
         assert long_ > short
+
+
+class TestFeedbackEvaluatorLLMScore:
+    def test_llm_score_parses_rating(self):
+        ev = FeedbackEvaluator()
+
+        async def fake_llm(prompt):
+            return type("FakeResult", (), {"text": "Rating: 0.85"})()
+
+        score = asyncio.run(ev.llm_score("hi", "hello world", fake_llm))
+        assert score == 0.85
+
+    def test_llm_score_fallback_on_no_match(self):
+        ev = FeedbackEvaluator()
+
+        async def fake_llm(prompt):
+            return type("FakeResult", (), {"text": "This is a great response"})()
+
+        score = asyncio.run(ev.llm_score("Q", "A nice answer", fake_llm))
+        assert score >= 0.0
+
+    def test_llm_score_fallback_on_exception(self):
+        ev = FeedbackEvaluator()
+
+        async def broken_llm(prompt):
+            raise RuntimeError("LLM unavailable")
+
+        score = asyncio.run(ev.llm_score("Q", "A", broken_llm))
+        assert score >= 0.0
+        assert ev.stats()["llm_fallbacks"] >= 1
+
+    def test_llm_score_parses_string_return(self):
+        ev = FeedbackEvaluator()
+
+        async def fake_llm(prompt):
+            return "Rating: 0.92"
+
+        score = asyncio.run(ev.llm_score("Q", "A", fake_llm))
+        assert score == 0.92
+
+    def test_llm_score_clamps_range(self):
+        ev = FeedbackEvaluator()
+
+        async def fake_llm(prompt):
+            return type("FakeResult", (), {"text": "Rating: 99.0"})()
+
+        score = asyncio.run(ev.llm_score("Q", "A", fake_llm))
+        assert score == 1.0
+
+    def test_llm_score_stats(self):
+        ev = FeedbackEvaluator()
+        assert "llm_calls" in ev.stats()
+        assert "llm_fallbacks" in ev.stats()
+        assert "llm_cache_size" in ev.stats()
+
+    def test_llm_score_cache_hit(self):
+        ev = FeedbackEvaluator()
+
+        async def fake_llm(prompt):
+            return "Rating: 0.75"
+
+        score1 = asyncio.run(ev.llm_score("hello", "world", fake_llm))
+        score2 = asyncio.run(ev.llm_score("hello", "world", fake_llm))
+        assert score1 == score2 == 0.75
+        assert ev.stats()["llm_cache_size"] >= 1
+
+    def test_llm_score_cache_eviction(self):
+        ev = FeedbackEvaluator(llm_score_cache_size=2)
+
+        async def fake_llm(prompt):
+            return "Rating: 0.5"
+
+        for i in range(5):
+            asyncio.run(ev.llm_score(f"q{i}", f"a{i}", fake_llm))
+        assert ev.stats()["llm_cache_size"] <= 2

@@ -48,6 +48,23 @@ class TestPPMPredictor:
         small_ppm.predict("c")
         assert small_ppm.stats()["cache_size"] <= 2
 
+    def test_cache_lru_evicts_oldest(self):
+        small_ppm = PPMPredictor(cache_size=2)
+        small_ppm.predict("first entry here")
+        small_ppm.predict("second entry here")
+        small_ppm.predict("third entry here")
+        stats = small_ppm.stats()
+        assert stats["cache_size"] <= 2
+
+    def test_cache_hit_refreshes_lru(self):
+        small_ppm = PPMPredictor(cache_size=2)
+        small_ppm.predict("keep me")
+        small_ppm.predict("evict me")
+        small_ppm.predict("keep me")
+        small_ppm.predict("new entry")
+        stats = small_ppm.stats()
+        assert stats["cache_size"] <= 2
+
     def test_unknown_family(self):
         pred = self.ppm.predict("x" * 50)
         assert pred.task_family == TaskFamily.UNKNOWN
@@ -61,3 +78,80 @@ class TestPPMPredictor:
         self.ppm.predict("test")
         self.ppm.clear_cache()
         assert self.ppm.stats()["cache_size"] == 0
+
+
+class TestPPMTraining:
+    def setup_method(self):
+        self.ppm = PPMPredictor(learning_rate=0.1)
+
+    def test_train_empty_returns_zero(self):
+        result = self.ppm.train([])
+        assert result["trained"] == 0
+
+    def test_train_adjusts_weights(self):
+        before = self.ppm._difficulty_weights["coding"]["complex_bonus"]
+        self.ppm.train([
+            {
+                "ppm_family": "coding",
+                "predicted_difficulty": 0.3,
+                "actual_difficulty": 0.8,
+                "success": False,
+                "score": 0.2,
+            },
+        ])
+        after = self.ppm._difficulty_weights["coding"]["complex_bonus"]
+        assert after != before
+
+    def test_train_multiple_records(self):
+        records = []
+        for i in range(5):
+            records.append({
+                "ppm_family": "chat",
+                "predicted_difficulty": 0.2,
+                "actual_difficulty": 0.1 + i * 0.05,
+                "success": True,
+                "score": 0.8,
+            })
+        result = self.ppm.train(records)
+        assert result["trained"] == 5
+
+    def test_train_clears_cache(self):
+        self.ppm.predict("test")
+        assert self.ppm.stats()["cache_size"] > 0
+        self.ppm.train([{
+            "ppm_family": "chat",
+            "predicted_difficulty": 0.5,
+            "actual_difficulty": 0.5,
+            "success": True,
+            "score": 0.8,
+        }])
+        assert self.ppm.stats()["cache_size"] == 0
+
+    def test_reset_training(self):
+        self.ppm.train([{
+            "ppm_family": "coding",
+            "predicted_difficulty": 0.5,
+            "actual_difficulty": 0.8,
+            "success": False,
+            "score": 0.2,
+        }])
+        self.ppm.reset_training()
+        assert self.ppm._difficulty_weights["coding"]["complex_bonus"] == 0.25
+        assert self.ppm._train_count == 0
+
+    def test_stats_includes_training(self):
+        stats = self.ppm.stats()
+        assert "train_count" in stats
+        assert "learning_rate" in stats
+        assert "difficulty_weights" in stats
+        assert "chat" in stats["difficulty_weights"]
+
+    def test_train_unknown_family_no_error(self):
+        result = self.ppm.train([{
+            "ppm_family": "nonexistent",
+            "predicted_difficulty": 0.5,
+            "actual_difficulty": 0.5,
+            "success": True,
+            "score": 0.9,
+        }])
+        assert result["trained"] == 1

@@ -177,7 +177,7 @@ class TaskDAG:
 
         if not dist:
             return []
-        end_node = max(dist, key=dist.get)
+        end_node = max(dist, key=lambda k: dist[k])
         path = []
         current: Optional[str] = end_node
         while current is not None:
@@ -244,6 +244,30 @@ class TaskDAG:
             ],
             "edges": [{"source": e.source, "target": e.target} for e in self.edges],
         }
+
+    def to_mermaid(self) -> str:
+        """Export DAG as Mermaid diagram for visualization."""
+        lines = ["graph TD"]
+        status_style = {
+            NodeStatus.COMPLETED: ":::completed",
+            NodeStatus.FAILED: ":::failed",
+            NodeStatus.RUNNING: ":::running",
+            NodeStatus.SKIPPED: ":::skipped",
+        }
+        for node in self.nodes.values():
+            label = f"{node.task_id}[{node.description}]"
+            style = status_style.get(node.status, "")
+            lines.append(f"    {label}{style}")
+        for edge in self.edges:
+            lines.append(f"    {edge.source} --> {edge.target}")
+        lines.extend([
+            "",
+            "    classDef completed fill:#90EE90",
+            "    classDef failed fill:#FFB6C1",
+            "    classDef running fill:#87CEEB",
+            "    classDef skipped fill:#D3D3D3",
+        ])
+        return "\n".join(lines)
 
     @classmethod
     def from_dict(cls, data: dict) -> TaskDAG:
