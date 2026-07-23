@@ -12,6 +12,15 @@ from zilli.loops.harness_orchestrator import HarnessCandidate, HarnessEdit, Harn
 from zilli.loops.memory import CycleMemory, MemoryEntry
 from zilli.loops.runner import LoopRunner
 from zilli.loops.trigger import DynamicIntervalTrigger, EventTrigger, FixedIntervalTrigger
+from zilli.loops.unknowns import (
+    BlindSpotReport,
+    ImplementationNote,
+    QuizQuestion,
+    QuizResult,
+    UnknownCategory,
+    UnknownItem,
+    UnknownsDiscovery,
+)
 from zilli.loops.verification import (
     CompositeVerifier,
     ExternalModelVerifier,
@@ -45,4 +54,11 @@ __all__ = [
     "ContextCurator",
     "ContextBullet",
     "Trajectory",
+    "UnknownsDiscovery",
+    "UnknownItem",
+    "UnknownCategory",
+    "BlindSpotReport",
+    "ImplementationNote",
+    "QuizQuestion",
+    "QuizResult",
 ]

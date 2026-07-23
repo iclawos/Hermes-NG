@@ -137,6 +137,15 @@ def main():
     audit_export.add_argument("--audit-dir", type=str, default="./audit_logs",
                               help="审计日志目录")
 
+    unknowns_parser = sub.add_parser("unknowns", help="发现未知项 (Fable 5)")
+    unknowns_sub = unknowns_parser.add_subparsers(dest="unknowns_command")
+    unknowns_sub.add_parser("blind-spot", help="执行盲点扫描")
+    unknowns_sub.add_parser("interview", help="生成面试问题")
+    unknowns_sub.add_parser("summary", help="显示未知项摘要")
+    unknowns_resolve = unknowns_sub.add_parser("resolve", help="标记未知项为已解决")
+    unknowns_resolve.add_argument("id", type=str, help="未知项ID")
+    unknowns_resolve.add_argument("resolution", type=str, help="解决方案描述")
+
     args = parser.parse_args()
 
     from zilli.configs import load_config
@@ -224,6 +233,8 @@ def main():
         _run_ppm(args)
     elif args.command == "audit":
         _run_audit(args)
+    elif args.command == "unknowns":
+        _run_unknowns(args)
 
     else:
         parser.print_help()
@@ -685,6 +696,78 @@ def _run_swe(args: argparse.Namespace):
             print(result.context.summarize()[:1000])
 
     asyncio.run(run())
+
+
+def _run_unknowns(args: argparse.Namespace):
+    import asyncio
+
+    from zilli.loops.unknowns import UnknownsDiscovery
+
+    discovery = UnknownsDiscovery()
+
+    if args.unknowns_command == "summary":
+        s = discovery.summary()
+        print("Unknowns Discovery Summary")
+        print("=" * 40)
+        print(f"  Total unknowns: {s['total_unknowns']}")
+        print(f"  Resolved: {s['resolved']}")
+        print(f"  Unresolved: {s['unresolved']}")
+        print(f"  Implementation notes: {s['implementation_notes']}")
+        print(f"  Deviations: {s['deviations']}")
+        print()
+        for cat, counts in s['by_category'].items():
+            print(f"  {cat}: {counts['resolved']}/{counts['total']} resolved")
+
+    elif args.unknowns_command == "resolve":
+        success = discovery.resolve_unknown(args.id, args.resolution)
+        if success:
+            print(f"Unknown {args.id} marked as resolved.")
+        else:
+            print(f"Unknown {args.id} not found.")
+
+    elif args.unknowns_command in ("blind-spot", "interview"):
+        async def run():
+            from zilli.models import ModelRegistry
+
+            registry = ModelRegistry()
+            model = registry.get_model("planner")
+
+            async def llm_fn(prompt: str) -> str:
+                result = await model.generate(prompt)
+                return result.text
+
+            if args.unknowns_command == "blind-spot":
+                task = input("Describe your task: ")
+                context = input("Paste relevant codebase context (or file paths): ")
+                report = await discovery.blind_spot_pass(task, context, llm_fn)
+                print("\nBlind Spot Report")
+                print("=" * 50)
+                print(f"Found {len(report.unknowns)} unknowns")
+                for u in report.unknowns:
+                    print(f"  [{u.impact}] {u.description}")
+                print(f"\nCodebase gaps: {len(report.codebase_gaps)}")
+                for g in report.codebase_gaps:
+                    print(f"  - {g}")
+                print(f"\nRisk areas: {len(report.risk_areas)}")
+                for r in report.risk_areas:
+                    print(f"  - {r}")
+                print("\nSuggested prompts:")
+                for p in report.suggested_prompts:
+                    print(f"  - {p}")
+
+            elif args.unknowns_command == "interview":
+                unresolved = discovery.get_unresolved()
+                if not unresolved:
+                    print("No unresolved unknowns. Run 'blind-spot' first.")
+                    return
+                task = input("Describe your task: ")
+                questions = await discovery.generate_interview_questions(task, unresolved, llm_fn)
+                print("\nInterview Questions")
+                print("=" * 50)
+                for i, q in enumerate(questions, 1):
+                    print(f"{i}. {q}")
+
+        asyncio.run(run())
 
 
 def _run_audit(args: argparse.Namespace):
