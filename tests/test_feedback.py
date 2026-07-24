@@ -44,6 +44,35 @@ class TestFeedbackCollector:
         asyncio.run(collector.start())
         asyncio.run(collector.stop())
 
+    def test_batch_size_triggers_early_flush(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as tmp:
+                path = str(Path(tmp) / "feedback.jsonl")
+                collector = FeedbackCollector(persist_path=path, batch_size=5,
+                                              flush_interval_seconds=3600)
+                for i in range(5):
+                    collector.record(FeedbackRecord(
+                        request_id=f"r{i}", ppm_difficulty=0.3, ppm_family="chat",
+                        selected_model="m1", strategy_tier="economy",
+                        actual_latency_ms=50, actual_cost=0.001,
+                    ))
+                await asyncio.sleep(0.1)
+                assert Path(path).exists()
+                lines = Path(path).read_text().strip().split("\n")
+                assert len(lines) == 5
+
+        asyncio.run(run())
+
+    def test_record_without_running_loop_no_crash(self):
+        collector = FeedbackCollector(batch_size=2)
+        for i in range(3):
+            collector.record(FeedbackRecord(
+                request_id=f"r{i}", ppm_difficulty=0.3, ppm_family="chat",
+                selected_model="m1", strategy_tier="economy",
+                actual_latency_ms=50, actual_cost=0.001,
+            ))
+        asyncio.run(collector.flush())
+
 
 class TestFeedbackEvaluator:
     def test_empty_response_scores_low(self):
