@@ -5,6 +5,8 @@ from zilli.adaptive.moo import (
     MultiObjectiveOptimizer,
 )
 
+np.random.seed(42)
+
 
 class TestCandidateSolution:
     def test_objective_vector(self):

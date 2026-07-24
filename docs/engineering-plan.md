@@ -7,7 +7,7 @@
 | 项目名 | Zilli（原 Hermes-NG） |
 | 版本 | 0.5.0 |
 | 语言 | Python 3.12+（主） + Rust（辅助 crate, 规划中） |
-| 测试 | 765 tests, 2 pre-existing warnings |
+| 测试 | 770 tests, 0 warnings |
 | 代码风格 | ruff (all rules), pyright (strict) |
 | 入口 | `zilli` (CLI), `zilli-evolve` (进化 CLI) |
 | 包管理 | pip / uv |
@@ -92,7 +92,7 @@
 | `test_swe.py` | swe | ~4 | ✅ |
 | `test_audit.py` | audit | ~3 | ✅ |
 | `test_*.py` (training) | training | ~15 | ✅ |
-| **合计** | **56 文件** | **765 tests** | **✅ 全部通过** |
+| **合计** | **58 文件** | **770 tests** | **✅ 全部通过** |
 
 ## 3. 架构图
 
@@ -237,13 +237,14 @@ MetaLoopRunner.run(input_data)
 
 | 编号 | 描述 | 影响 | 优先级 |
 |------|------|------|--------|
-| T-1 | `TestSuiteVerifier` 有 `__init__()` 导致 pytest 收集警告 | 测试警告 | 低 |
+| T-1 | ~~`TestSuiteVerifier` 有 `__init__()` 导致 pytest 收集警告~~ ✅ 已添加 `__test__ = False` | 测试警告 | 低 |
 | T-2 | PPM 使用 regex 而非模型进行分类，复杂任务分类精度有限 | 功能边界 | 中 |
 | T-3 | ~~Streamlit Dashboard 尚无鉴权~~ ✅ 已添加登录 + 角色管控 | 安全 | 低 |
 | T-4 | Rust crate (`zilli-rs`) 已决策但尚未实现 | 功能缺失 | 低 |
 | T-5 | ~~CI（GitHub Actions）尚未接入~~ ✅ 已配置 lint + typecheck + test | 流程缺失 | 中 |
-| T-6 | PPM cache eviction 策略使用 hash 键值而非插入顺序 | 极低概率错误 | 低 |
-| T-7 | FeedbackCollector._flush_loop 中 batch_size 检查在 flush() 后永远为 False | 死代码 | 低 |
+| T-6 | ~~PPM cache eviction 策略使用 hash 键值而非插入顺序~~ ✅ OrderedDict LRU `popitem(last=False)` 已正确 | 极低概率错误 | 低 |
+| T-7 | ~~FeedbackCollector._flush_loop 中 batch_size 检查在 flush() 后永远为 False~~ ✅ 死代码已移除，`record()` 达批量时早触发 flush | 死代码 | 低 |
+| T-8 | ~~ppm ↔ ppm_classifier 循环导入~~ ✅ 共享类型抽至 `ppm_types.py` | 架构 | 低 |
 
 ## 6. 下一步开发计划
 

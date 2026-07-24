@@ -12,6 +12,8 @@ from zilli.distillation.dsl import (
 )
 from zilli.training.distillation import DistillationCycle, DistillationSample
 
+random.seed(42)
+
 
 def _make_sample(exec_reward: float = 0.5, plan_reward: float = 0.8) -> DistillationSample:
     return DistillationSample(
