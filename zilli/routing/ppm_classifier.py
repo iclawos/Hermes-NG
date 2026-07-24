@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from zilli.routing.ppm import PPMPrediction, TaskFamily
+from zilli.routing.ppm_types import PPMPrediction, TaskFamily
 
 logger = logging.getLogger("zilli.routing.ppm_classifier")
 
