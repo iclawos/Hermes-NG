@@ -70,19 +70,17 @@ class SkillEvolutionEngine:
         if self.mode == "harness" and self.mom_router:
             route_text = f"{skill_file} evolution"
             try:
-                loop = asyncio.get_running_loop()
-                decision = asyncio.run_coroutine_threadsafe(
-                    self.mom_router.route(route_text), loop,
-                ).result(timeout=5)
-                self.reflection_model = decision.model_id
+                asyncio.get_running_loop()
+                logger.warning(
+                    "evolve() called from async context; skipping sync MOM route "
+                    "(use async evolve methods for MOM routing)"
+                )
             except RuntimeError:
                 try:
                     decision = asyncio.run(self.mom_router.route(route_text))
                     self.reflection_model = decision.model_id
                 except Exception:
                     pass
-            except Exception:
-                pass
 
         reflections = self._reflect_on_trajectories(trajectory_data)
         strategy = self._select_strategy(module, reflections)
@@ -227,10 +225,17 @@ class SkillEvolutionEngine:
         if self.mode == "harness" and self.mom_router and reflections:
             text = " ".join(reflections)
             try:
-                decision = asyncio.run(self.mom_router.route(text))
-                return decision.model_id or self.reflection_model or "default"
-            except Exception:
-                pass
+                asyncio.get_running_loop()
+                logger.warning(
+                    "_route_reflection() called from async context; "
+                    "using cached reflection model"
+                )
+            except RuntimeError:
+                try:
+                    decision = asyncio.run(self.mom_router.route(text))
+                    return decision.model_id or self.reflection_model or "default"
+                except Exception:
+                    pass
         return self.reflection_model or "default"
 
     def _select_strategy(self, module: Dict, reflections: List[str]) -> str:

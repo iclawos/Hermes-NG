@@ -15,7 +15,7 @@ from zilli.adaptive.sota_scheduler import DynamicSOTAScheduler
 from zilli.data import TrajectoryStore
 from zilli.envs import HermesSandbox
 from zilli.evaluation.meta_evaluator import EvaluationSample, MetaEvaluator
-from zilli.infra.async_scheduler import AsyncRolloutScheduler
+from zilli.infra.async_scheduler import AsyncRolloutScheduler, RolloutResult
 from zilli.tasks import load_tasks
 from zilli.training.champion_challenger import ArenaStatus, ChampionChallenger
 from zilli.training.rl_trainer import RLTrainer
@@ -303,7 +303,7 @@ class EvolveToTrainPipeline:
             message="No rollback version available",
         )
 
-    async def _sota_aware_rollout(self, task: dict) -> Any:
+    async def _sota_aware_rollout(self, task: dict) -> RolloutResult:
         task_type = task.get("type", "default")
         difficulty = task.get("difficulty", 0.5)
         use_sota = self._sota_scheduler.should_call_sota(
@@ -353,14 +353,13 @@ class EvolveToTrainPipeline:
         else:
             self._sota_scheduler.record_without_sota(task_type, task_success)
 
-        class RolloutResult:
-            def __init__(self, traj, reward, completed=True):
-                self.trajectory = traj
-                self.reward = reward
-                self.completed = completed
-                self.tokens = len(traj) * 256
-
-        return RolloutResult(traj, total_reward)
+        return RolloutResult(
+            task_id=str(task.get("id", "")),
+            trajectory=traj,
+            reward=total_reward,
+            tokens=len(traj) * 256,
+            completed=True,
+        )
 
     def _load_trajectories(self) -> list[dict]:
         traj_dir = Path(self.config.trajectories_dir)

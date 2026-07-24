@@ -15,6 +15,8 @@ logger = logging.getLogger("zilli.loops.verification")
 
 
 class TestSuiteVerifier(Verifier):
+    __test__ = False
+
     def __init__(self, command: str, timeout: float = 120.0, cwd: Optional[str] = None):
         self._command = command
         self._timeout = timeout

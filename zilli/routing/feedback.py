@@ -63,6 +63,12 @@ class FeedbackCollector:
 
     def record(self, record: FeedbackRecord) -> None:
         self._queue.put_nowait(record)
+        if self._queue.qsize() >= self._batch_size:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.flush())
+            except RuntimeError:
+                pass
 
     async def flush(self) -> None:
         while not self._queue.empty():
@@ -81,8 +87,6 @@ class FeedbackCollector:
             try:
                 await asyncio.sleep(self._flush_interval)
                 await self.flush()
-                if len(self._buffer) >= self._batch_size:
-                    await self.flush()
             except asyncio.CancelledError:
                 break
             except Exception as e:
