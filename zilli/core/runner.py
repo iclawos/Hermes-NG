@@ -70,6 +70,10 @@ class TaskRunner:
                     name=step.name, success=False, error=str(e),
                     duration_ms=(time.monotonic() - start) * 1000,
                 )
+        return StepResult(
+            name=step.name, success=False, error="Max retries exceeded",
+            duration_ms=(time.monotonic() - start) * 1000,
+        )
 
 
 __all__ = ["TaskRunner", "TaskStep", "StepResult"]

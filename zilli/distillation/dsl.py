@@ -302,7 +302,8 @@ def run_multi_round(
 
     if lineage.results and lineage.results[-1].iteration.best:
         all_results = [r.iteration.best for r in lineage.results if r.iteration.best]
-        lineage.best_params = _pick_best(all_results).params if all_results else None
+        best = _pick_best(all_results) if all_results else None
+        lineage.best_params = best.params if best else None
 
     return lineage
 

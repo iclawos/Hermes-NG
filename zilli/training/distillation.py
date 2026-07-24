@@ -5,7 +5,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from zilli.infra.device_utils import get_device, is_gpu_available
 
@@ -89,7 +89,7 @@ class DistillationScheduler:
         self._total_samples += len(samples)
 
     def compute_bc_loss(self, executor_log_probs: List[float],
-                        planner_log_probs: List[float]) -> float:
+                        planner_log_probs: List[float]) -> Tuple[float, float]:
         bc = 0.0
         kl = 0.0
         n = len(executor_log_probs)
@@ -265,7 +265,7 @@ class DistillationScheduler:
         if not is_gpu_available():
             return None
         try:
-            import torch
+            import torch  # type: ignore[import-not-found]
             device = get_device()
             exec_log_probs = torch.tensor(
                 [s.executor_log_prob for s in samples], device=device,
@@ -429,7 +429,7 @@ class DistillationScheduler:
             "avg_executor_reward": cycle.avg_executor_reward,
             "avg_planner_reward": cycle.avg_planner_reward,
             "lora_triggered": cycle.lora_triggered,
-            "elapsed_sec": round(cycle.end_time - cycle.start_time, 1),
+            "elapsed_sec": round((cycle.end_time or cycle.start_time) - cycle.start_time, 1),
             "timestamp": cycle.end_time,
         }
         with open(log_path, "a") as f:

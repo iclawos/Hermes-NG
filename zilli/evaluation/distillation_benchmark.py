@@ -136,7 +136,7 @@ def run_benchmarked_distillation(
     arena: Optional[ChampionChallenger] = None,
     champion_name: str = "pre_distill",
     challenger_name: str = "post_distill",
-) -> DistillationCycle:
+) -> Optional[DistillationCycle]:
     before = tracker.record_before(scheduler, model_name)
 
     cycle = scheduler.run_cycle()

@@ -33,7 +33,7 @@ class ModelRegistry:
         if config is not None:
             profile = config.to_model_profile()
         if profile is None:
-            profile = ModelProfile()
+            profile = ModelProfile(fallback_strategy="lower_tier")
         self.profile = profile
         self._backends: dict[str, ModelBackend] = {}
         self._role_map: dict[ModelRole, list[str]] = {

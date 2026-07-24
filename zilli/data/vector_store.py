@@ -103,16 +103,17 @@ class ChromaTrajectoryStore:
                     n_results=n_results,
                     where=where,
                 )
-                ids = results.get("ids", [[]])[0]
-                distances = results.get("distances", [[]])[0]
-                documents = results.get("documents", [[]])[0]
-                metadatas = results.get("metadatas", [[]])[0]
+                ids = results.get("ids") or [[]]
+                ids = ids[0]
+                distances = (results.get("distances") or [[]])[0]
+                documents = (results.get("documents") or [[]])[0]
+                metadatas = (results.get("metadatas") or [[]])[0]
                 return [
                     VectorSearchResult(
                         id=ids[i] if i < len(ids) else "",
                         distance=distances[i] if i < len(distances) else 1.0,
                         document=documents[i] if i < len(documents) else "",
-                        metadata=metadatas[i] if i < len(metadatas) else {},
+                        metadata=dict(metadatas[i]) if i < len(metadatas) and metadatas[i] else {},
                     )
                     for i in range(max(len(ids), n_results))
                     if i < len(ids) and ids[i]

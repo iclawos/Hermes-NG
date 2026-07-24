@@ -24,13 +24,13 @@ class GRPO_Trainer:  # noqa: N801
 
         log_probs = np.array([t.get("log_prob", 0.0) for t in trajectories])
         old_log_probs = np.array([t.get("old_log_prob", 0.0) for t in trajectories])
-        advantages = np.array(advantages)
+        advantages_arr = np.array(advantages)
 
         ratio = np.exp(np.clip(log_probs - old_log_probs, -5, 5))
         clipped = np.clip(ratio, 1 - self.clip_range, 1 + self.clip_range)
 
-        surr1 = ratio * advantages
-        surr2 = clipped * advantages
+        surr1 = ratio * advantages_arr
+        surr2 = clipped * advantages_arr
         loss = -np.minimum(surr1, surr2).mean()
 
         kl = (log_probs - old_log_probs).mean()

@@ -5,7 +5,7 @@ from zilli.data.trajectory_cleaner import TrajectoryCleaner
 
 
 class TrajectoryStore:
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: "Dict[str, Any] | None" = None):
         self.config = config or {}
         self.golden_trajectories: List[Dict] = []
         self.failure_trajectories: List[Dict] = []

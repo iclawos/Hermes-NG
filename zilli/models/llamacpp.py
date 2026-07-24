@@ -3,18 +3,22 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import AsyncIterator
+from typing import TYPE_CHECKING, AsyncIterator
 
 from zilli.models.base import GenerationResult, ModelBackend
 
 logger = logging.getLogger("zilli.models.llamacpp")
 
-try:
+if TYPE_CHECKING:
     import httpx
     HAS_HTTPX = True
-except ImportError:
-    HAS_HTTPX = False
-    httpx = None
+else:
+    try:
+        import httpx
+        HAS_HTTPX = True
+    except ImportError:
+        HAS_HTTPX = False
+        httpx = None  # type: ignore[assignment]
 
 
 class LlamaCppBackend(ModelBackend):

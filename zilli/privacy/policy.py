@@ -101,9 +101,13 @@ class PolicyStore:
             }
             for tid, p in self._policies.items()
         }
+        if self._path is None:
+            return
         self._path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
     def _load(self):
+        if self._path is None:
+            return
         data = json.loads(self._path.read_text())  # noqa: SYNC101
         for tid, d in data.items():
             self._policies[tid] = DataGovernancePolicy(

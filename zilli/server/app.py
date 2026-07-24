@@ -81,10 +81,10 @@ class RateLimiter:
 class ZilliAppState:
     def __init__(self, config: Optional[ZilliConfig] = None):
         self.config = config
-        self.registry: Optional[ModelRegistry] = None
-        self.classifier: Optional[RouteClassifier] = None
-        self.router: Optional[LocalHybridRouter] = None
-        self.privacy: Optional[PrivacyEngine] = None
+        self.registry: ModelRegistry = None  # type: ignore[assignment]
+        self.classifier: RouteClassifier = None  # type: ignore[assignment]
+        self.router: LocalHybridRouter = None  # type: ignore[assignment]
+        self.privacy: PrivacyEngine = None  # type: ignore[assignment]
         self.cost_controller = None
         self.api_keys: set[str] = set()
         self.rate_limiter = RateLimiter()
@@ -216,7 +216,7 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
 
     @app.post("/v1/route", response_model=RouteResponse)
     async def route(body: RouteRequest, x_tenant_id: str = Header("default"),
-                    request: Request = None):
+                    request: Request = None):  # type: ignore[assignment]
         state.ensure_initialized()
         start = time.monotonic()
 
@@ -363,7 +363,7 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
     @app.post("/v1/chat/completions")
     async def chat_completions(body: ChatCompletionRequest,
                                x_tenant_id: str = Header("default"),
-                               request: Request = None):
+                               request: Request = None):  # type: ignore[assignment]
         state.ensure_initialized()
         start = time.time()
 

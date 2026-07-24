@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from zilli.routing.feedback import FeedbackCollector, FeedbackRecord
 from zilli.routing.ppm import PPMPredictor, TaskFamily
@@ -30,7 +30,7 @@ class MOMRouter:
         profile: ModelProfile,
         strategy: StrategySelector,
         feedback: Optional[FeedbackCollector] = None,
-        budget_provider: Optional[callable] = None,
+        budget_provider: Optional[Callable[[], float]] = None,
     ):
         self.ppm = ppm
         self.profile = profile

@@ -174,7 +174,7 @@ class LoopRunner(Generic[T]):
                 break
 
     @staticmethod
-    def _extract_task_id(input_data: Any, fallback: str) -> str:
+    def _extract_task_id(input_data: Any, fallback: "str | int") -> str:
         if isinstance(input_data, dict):
             return str(input_data.get("task_id", fallback))
         return str(getattr(input_data, "task_id", fallback))

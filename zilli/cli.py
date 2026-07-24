@@ -731,6 +731,9 @@ def _run_unknowns(args: argparse.Namespace):
 
             registry = ModelRegistry()
             model = registry.get_model("planner")
+            if model is None:
+                print("Error: model 'planner' is not registered. Check your model configuration.")
+                return
 
             async def llm_fn(prompt: str) -> str:
                 result = await model.generate(prompt)

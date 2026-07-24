@@ -159,7 +159,7 @@ class ZilliConfig(BaseModel):
     def to_model_profile(self) -> ModelProfile:
         if self.models and self.models.profile:
             return self.models.profile
-        return ModelProfile()
+        return ModelProfile(fallback_strategy="lower_tier")
 
     def to_training_dict(self) -> dict:
         return self.training.model_dump(exclude_none=True)

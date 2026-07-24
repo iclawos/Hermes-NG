@@ -157,7 +157,7 @@ async def run_rollout(sandbox: HermesSandbox, task: Dict) -> Dict:
     }
 
 
-async def main(config_path: str = None, experiment_name: str = "zilli_default", resume: str = ""):
+async def main(config_path: str | None = None, experiment_name: str = "zilli_default", resume: str = ""):
     base = Path(__file__).parent
     cfg_path = Path(config_path).resolve() if config_path else base / "configs" / "training_config.yaml"
     if not cfg_path.exists():

@@ -68,7 +68,7 @@ class Agent:
             code = await self._generate_code(task, attempt, code, last_error)
             if not code:
                 return AgentResult(
-                    success=False, error="Failed to generate code",
+                    success=False, output="", error="Failed to generate code",
                     iterations=attempt, duration_ms=(time.monotonic() - start) * 1000,
                 )
 

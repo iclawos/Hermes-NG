@@ -17,7 +17,7 @@ class RLTrainer:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
     def update(self, batch: List[Dict]) -> Dict[str, float]:
-        if self.training_config.algorithm == "GRPO":
+        if isinstance(self.impl, GRPO_Trainer):
             advantages = self.impl.compute_advantages(batch)
         else:
             rewards = [t.get("reward", 0.0) for t in batch]

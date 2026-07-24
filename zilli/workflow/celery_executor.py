@@ -77,8 +77,8 @@ class CeleryDAGExecutor:
         return results
 
     async def _submit_celery_task(self, node: DAGNode, task_fn) -> Any:
-        from celery import current_app
-        task = current_app.send_task(
+        from celery import current_app  # type: ignore[import-not-found]
+        task = current_app.send_task(  # type: ignore[operator]
             "zilli.workflow.tasks.execute_dag_node",
             args=[node.task_id, node.description],
             kwargs={"task_type": node.task_type.value},

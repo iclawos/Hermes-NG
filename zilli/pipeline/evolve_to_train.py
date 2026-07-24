@@ -202,10 +202,9 @@ class EvolveToTrainPipeline:
                 self._meta_evaluator.record(EvaluationSample(
                     task_id=f"train_epoch_{epoch}",
                     model_name="trainer",
+                    features={},
                     predicted_score=0.5,
                     actual_score=float(avg_reward),
-                    cost=0.0,
-                    latency_ms=0.0,
                 ))
 
         store_stats = self._store.stats()
@@ -304,7 +303,7 @@ class EvolveToTrainPipeline:
             message="No rollback version available",
         )
 
-    async def _sota_aware_rollout(self, task: dict) -> dict:
+    async def _sota_aware_rollout(self, task: dict) -> Any:
         task_type = task.get("type", "default")
         difficulty = task.get("difficulty", 0.5)
         use_sota = self._sota_scheduler.should_call_sota(

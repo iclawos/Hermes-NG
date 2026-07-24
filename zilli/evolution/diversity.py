@@ -126,7 +126,7 @@ class DiversityController:
         candidate_ngram = ngram_fingerprint(candidate_source) if self._use_ngram else None
         for entry in self._population:
             sim = fingerprint_similarity(candidate_fp, entry.fingerprint)
-            if self._use_ngram:
+            if self._use_ngram and candidate_ngram is not None:
                 ngram_sim = jaccard_similarity(candidate_ngram, ngram_fingerprint(entry.source))
                 sim = max(sim, ngram_sim)
             if sim > max_sim:
@@ -216,7 +216,7 @@ class DiversityController:
 
     def diversity_metrics(self) -> dict[str, Any]:
         """Compute population diversity statistics."""
-        base = {
+        base: dict[str, Any] = {
             "generation": self._generation,
             "rejected_count": self._rejected_count,
         }

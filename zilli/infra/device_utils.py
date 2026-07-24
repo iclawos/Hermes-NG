@@ -28,7 +28,7 @@ def detect_device(prefer: str = "auto") -> str:
 def _validate_device(device: str) -> str:
     if device == "cuda":
         try:
-            import torch
+            import torch  # type: ignore[import-not-found]
             if torch.cuda.is_available():
                 return "cuda"
         except ImportError:
@@ -37,7 +37,7 @@ def _validate_device(device: str) -> str:
         return "cpu"
     if device == "mps":
         try:
-            import torch
+            import torch  # type: ignore[import-not-found]
             if torch.backends.mps.is_available():
                 return "mps"
         except ImportError:
@@ -49,7 +49,7 @@ def _validate_device(device: str) -> str:
 
 def _auto_detect() -> str:
     try:
-        import torch
+        import torch  # type: ignore[import-not-found]
         if torch.cuda.is_available():
             logger.info("CUDA detected, using GPU")
             return "cuda"
@@ -94,14 +94,14 @@ def is_gpu_available() -> bool:
 
 def get_device_count() -> int:
     if is_cuda_available():
-        import torch
+        import torch  # type: ignore[import-not-found]
         return torch.cuda.device_count()
     return 0
 
 
 def to_device(tensor, device: Optional[str] = None):
     try:
-        import torch
+        import torch  # type: ignore[import-not-found]
     except ImportError:
         raise ImportError("torch is required for to_device()")
     if not isinstance(tensor, torch.Tensor):

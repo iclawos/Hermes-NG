@@ -7,7 +7,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger("zilli.routing.feedback")
 
@@ -151,7 +151,7 @@ class FeedbackEvaluator:
         self,
         request: str,
         response: str,
-        llm_generate: callable,
+        llm_generate: Callable[..., Any],
     ) -> float:
         cache_key = hash((request[:200].lower(), response[:200].lower()))
         cached = self._llm_score_cache.get(cache_key)

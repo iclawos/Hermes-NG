@@ -29,8 +29,9 @@ class StructuredFormatter(logging.Formatter):
             "trace_id": get_trace_id(),
             "file": f"{record.pathname}:{record.lineno}",
         }
-        if hasattr(record, "extra") and isinstance(record.extra, dict):
-            base.update(record.extra)
+        record_extra = getattr(record, "extra", None)
+        if isinstance(record_extra, dict):
+            base.update(record_extra)
         if record.exc_info and record.exc_info[0]:
             base["exc"] = self.formatException(record.exc_info)
         return json.dumps(base, ensure_ascii=False)

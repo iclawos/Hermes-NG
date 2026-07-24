@@ -139,7 +139,7 @@ class WorkflowRegistry:
             classifier=self._classifier,
         )
 
-    def get_workflow(self, industry: IndustryType) -> IndustryWorkflow:
+    def get_workflow(self, industry: IndustryType) -> IndustryWorkflow | None:
         return self._WORKFLOWS.get(industry)
 
     def list_industries(self) -> list[dict]:

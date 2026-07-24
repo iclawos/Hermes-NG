@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 
 class TrajectoryCleaner:
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: "Dict[str, Any] | None" = None):
         self.config = config or {}
         self.max_dedup_similarity = self.config.get("max_dedup_similarity", 0.85)
         self.max_anomaly_std = self.config.get("max_anomaly_std", 2.0)

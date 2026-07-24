@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from zilli.loops.base import LoopResult
+from zilli.loops.base import LoopResult, Trigger
 from zilli.loops.runner import LoopRunner
 from zilli.loops.verification import TestSuiteVerifier
 from zilli.models.base import GenerationResult, ModelBackend
@@ -303,7 +303,7 @@ class SWEAgent:
         return text.strip()
 
 
-class _AlwaysTrigger:
+class _AlwaysTrigger(Trigger):
     async def wait(self) -> bool:
         return False
 

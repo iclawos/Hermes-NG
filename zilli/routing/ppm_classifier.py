@@ -295,9 +295,9 @@ class SklearnONNXClassifier(PPMClassifier):
                 fam_path = Path(tmp) / "family.onnx"
                 diff_path = Path(tmp) / "difficulty.onnx"
                 with open(fam_path, "wb") as f:
-                    f.write(family_onnx.SerializeToString())
+                    f.write(family_onnx.SerializeToString())  # type: ignore[attr-defined]
                 with open(diff_path, "wb") as f:
-                    f.write(diff_onnx.SerializeToString())
+                    f.write(diff_onnx.SerializeToString())  # type: ignore[attr-defined]
 
                 out = Path(output_path)
                 out.parent.mkdir(parents=True, exist_ok=True)

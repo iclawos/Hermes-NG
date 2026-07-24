@@ -134,7 +134,7 @@ class ResultFusion:
             key = o.text.strip().lower()
             votes[key] = votes.get(key, 0) + o.confidence
 
-        winner = max(votes, key=votes.get)
+        winner = max(votes, key=lambda k: votes[k])
         winner_models = [o.model_name for o in outputs if o.text.strip().lower() == winner]
 
         return FusionResult(

@@ -9,7 +9,7 @@ from zilli.schema.actions import TaskConfig
 logger = logging.getLogger("zilli.tasks")
 
 
-def load_tasks(category: str = None) -> List[Dict[str, Any]]:
+def load_tasks(category: "str | None" = None) -> List[Dict[str, Any]]:
     """加载所有任务 YAML 文件，使用 TaskConfig schema 验证。"""
     base = Path(__file__).parent
     all_tasks = []
