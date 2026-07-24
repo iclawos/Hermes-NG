@@ -1,30 +1,34 @@
-# MEMORY.md — 会话状态记录
+# MEMORY.md — 会话状态记录 (2026-07-24)
 
-## 本次完成
+## 额度状态
+- Kimi 配额不足，**07-24 14:38 后 5 小时窗口重置**
+- 重置后继续：UI 重新设计任务（见下）
 
-### P0（全部完成）
-- **zilli-rs 决策**：确定"项目内 Rust helper 库"路线，文档化在 `docs/zilli-rs-decision.md`
-- **Celery+Redis 工作流引擎**：创建 `zilli/workflow/` 包 — `celery_app.py`、`celery_executor.py`、`tasks.py`、`workflow_dag.py`；支持 DAG 持久化执行、任务重试、结果回调
-- **ChromaDB 向量存储**：`zilli/envs/vector_store.py` — 替代内存 TrajectoryStore；支持集合管理、语义检索、元数据过滤
+## 已完成
+- v0.5.0: 贝叶斯 MetaEvaluator、SOTA 硬约束、DAG Mermaid、audit export CLI、CI Python 3.12 + pyright
+- Fable 5 未知项发现模块: `zilli/loops/unknowns.py` + `zilli unknowns` CLI
+- **预存 pyright 89 errors → 0**（commit 3139292）
+  - 注意: batch A agent 把 `industry/workflows.py get_workflow` 改成抛 KeyError 破坏行为，已恢复为返回 None
+  - 注意: FastAPI `Request` 参数不能用 `Request | None` 注解（破坏依赖注入），用 `Request = None  # type: ignore[assignment]`
+- 状态: 765 passed / ruff 0 / pyright 0
 
-### P1（全部完成）
-- **Planner 调用频率控制器**：
-  - `zilli/envs/planner_budget.py` — `PlannerBudget` 类，滑动窗口 (deque) 硬性限制 planner 比例 ≤ 5%
-  - `zilli/routing/frequency_controller.py` — `PlannerFrequencyController` 类，持久化文件 + 时间窗口比例控制
-  - 集成到 `LocalHybridRouter` — router 初始化时接收 `planner_budget`，超限时跳过 plan() 直接走 executor
-- **Streamlit 管理台**：`zilli/dashboard_app.py` — 审计日志浏览/导出、成本监控、系统状态、DAG 运行记录
-- **模型能力画像系统**：`zilli/models/profiler.py` — `ModelProfiler` 类，ELO 评分、六维能力雷达图、任务结果追踪
+## 待办（重置后继续）
+### 任务：所有开发过的网页 UI 重新设计升级
+目标网站（IClawMini 网站群，位于 `/home/jackliao/文档/ETHER以太/OpenClaw/IClawMini/`）:
+- `index.html` / `index.zh.html` — 主页（5 项目卡片）
+- `vibebuddy/ring.html` / `ring.zh.html` — Vibe Ring
+- `vibebuddy/cat.html` / `cat.zh.html` — Vibe Cat
+- `vibebuddy/pods.html` / `pods.zh.html` — Vibe Pods（AI 自然语言人机接口定位）
+- 导航: `components/nav-en.html` / `nav-zh.html`（Vibe Buddy dropdown）
+- 样式: `styles.css`、`main.js`
 
-### P2（完成）
-- **install.sh 一键部署脚本**：自动检测 python/uv/pip，创建 venv，安装依赖，可选 Docker 中间件检查
+要求:
+1. 统一设计系统（配色、字体、间距、动效）
+2. 保持现有内容结构和双语支持
+3. 先审查现状 → 提出设计方案 → 确认后实施
+4. 完成后推送 GitHub Pages（git push 需要 ask 权限）
 
-### 测试
-- 新增 15 个测试（`test_planner_budget.py`、`test_frequency_controller.py`、`test_profiler.py`）
-- 全量测试 608 passed（原有 593 + 新增 15）
-- 新模块覆盖率约 95%
-
-## 待办
-- 无阻塞项，所有 P0/P1/P2 均已实现
-- 建议后续接入 CI（GitHub Actions）自动跑 608 个测试
-- Streamlit dashboard 需搭配 `streamlit run zilli/dashboard_app.py` 使用
-- Celery worker 需启动 `celery -A zilli.workflow.celery_app worker --loglevel=info`
+## 关键文件
+- Zilli 工作目录: `/home/jackliao/文档/ETHER以太/Zilli/Zilli/`
+- IClawMini 网站: `/home/jackliao/文档/ETHER以太/OpenClaw/IClawMini/`
+- SSH key: `~/.ssh/iclawos-battery-guardian`（battery-guardian repo 专用）
