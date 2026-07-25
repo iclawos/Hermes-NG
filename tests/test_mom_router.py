@@ -87,7 +87,6 @@ class TestPPMProductionLoop:
             )
 
     def test_auto_train_triggers_at_threshold(self):
-        weights_before = dict(self.ppm._difficulty_weights)
         self._record(10)
         assert self.router._train_cycles == 1
         assert self.router._feedback_since_train == 0
