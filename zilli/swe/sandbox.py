@@ -94,6 +94,7 @@ class Sandbox:
             )
         except asyncio.TimeoutError:
             proc.kill()
+            await proc.wait()
             duration = (time.monotonic() - start) * 1000
             return CommandResult(
                 stdout="", stderr=f"Timed out after {timeout}s",

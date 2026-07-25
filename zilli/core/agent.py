@@ -108,12 +108,15 @@ class Agent:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=tmp,
                 )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-                out = stdout.decode(errors="replace").strip()
-                err = stderr.decode(errors="replace").strip()
-                return proc.returncode == 0, out, err
-            except asyncio.TimeoutError:
-                return False, "", "Timeout (30s)"
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+                    out = stdout.decode(errors="replace").strip()
+                    err = stderr.decode(errors="replace").strip()
+                    return proc.returncode == 0, out, err
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    return False, "", "Timeout (30s)"
             except Exception as e:
                 return False, "", str(e)
 

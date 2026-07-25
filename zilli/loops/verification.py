@@ -49,6 +49,7 @@ class TestSuiteVerifier(Verifier):
                 )
             except asyncio.TimeoutError:
                 proc.kill()
+                await proc.wait()
                 return VerificationResult(
                     passed=False,
                     evidence=f"Timed out after {self._timeout}s",
