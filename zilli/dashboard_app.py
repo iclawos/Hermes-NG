@@ -43,7 +43,10 @@ def _check_password() -> bool:
 
 
 def _load_users() -> dict:
-    secrets_users = st.secrets.get("dashboard", {}).get("users", {})
+    try:
+        secrets_users = st.secrets.get("dashboard", {}).get("users", {})
+    except Exception:
+        secrets_users = {}
     if secrets_users:
         return secrets_users
 

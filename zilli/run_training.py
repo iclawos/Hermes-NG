@@ -182,7 +182,9 @@ async def main(config_path: str | None = None, experiment_name: str = "zilli_def
         max_retries=training_config.get("max_retries", 2),
     )
     length_controller = LengthElasticController()
-    trainer = RLTrainer(training_config)
+    from zilli.training.config import TrainingConfig as _TCfg
+    _rl_keys = set(_TCfg.model_fields)
+    trainer = RLTrainer({k: v for k, v in training_config.items() if k in _rl_keys})
     if resume:
         experiment, start_epoch = TrainingExperiment.resume_from(
             resume, training_config, log_dir,
