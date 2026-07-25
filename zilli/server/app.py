@@ -85,6 +85,8 @@ class ZilliAppState:
         self.classifier: RouteClassifier = None  # type: ignore[assignment]
         self.router: LocalHybridRouter = None  # type: ignore[assignment]
         self.privacy: PrivacyEngine = None  # type: ignore[assignment]
+        from zilli.tenancy import TenantManager
+        self.tenants: TenantManager = None  # type: ignore[assignment]
         self.cost_controller = None
         self.api_keys: set[str] = set()
         self.rate_limiter = RateLimiter()
@@ -106,6 +108,9 @@ class ZilliAppState:
         if self.config is not None:
             from zilli.envs.cost_controller import CostController
             self.cost_controller = CostController(config=self.config)
+
+        from zilli.tenancy import TenantManager
+        self.tenants = TenantManager()
 
         keys_env = os.environ.get("ZILLI_API_KEYS", "")
         if keys_env:
@@ -212,6 +217,22 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
             models_alive=alive,
         )
 
+    # ── Tenants ─────────────────────────────────────────────────────────
+
+    @app.get("/v1/tenants")
+    async def list_tenants():
+        state.ensure_initialized()
+        return {"tenants": state.tenants.list_tenants()}
+
+    @app.get("/v1/tenants/{tenant_id}")
+    async def get_tenant(tenant_id: str):
+        state.ensure_initialized()
+        try:
+            ctx = state.tenants.get(tenant_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid tenant id")
+        return ctx.summary()
+
     # ── Route ──────────────────────────────────────────────────────────
 
     @app.post("/v1/route", response_model=RouteResponse)
@@ -220,12 +241,20 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
         state.ensure_initialized()
         start = time.monotonic()
 
+        try:
+            tenant_ctx = state.tenants.get(x_tenant_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid tenant id")
+
         verdict = state.privacy.evaluate(
-            body.request, tenant_id=x_tenant_id, mode=SanitizationMode.AUTO,
+            body.request, tenant_id=tenant_ctx.tenant_id, mode=SanitizationMode.AUTO,
         )
         if not verdict.passed:
             raise HTTPException(status_code=403, detail="Request blocked by privacy policy")
         input_text = verdict.sanitized_text
+
+        if not tenant_ctx.check_role("planner") and not tenant_ctx.check_role("executor"):
+            raise HTTPException(status_code=403, detail="No execution roles allowed for tenant")
 
         try:
             result = await state.router.run(

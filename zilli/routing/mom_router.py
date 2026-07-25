@@ -31,12 +31,16 @@ class MOMRouter:
         strategy: StrategySelector,
         feedback: Optional[FeedbackCollector] = None,
         budget_provider: Optional[Callable[[], float]] = None,
+        train_every: int = 100,
     ):
         self.ppm = ppm
         self.profile = profile
         self.strategy = strategy
         self.feedback = feedback
         self._budget_provider = budget_provider or (lambda: 0.5)
+        self._train_every = train_every
+        self._feedback_since_train = 0
+        self._train_cycles = 0
 
     async def route(self, text: str, context: Optional[dict] = None) -> RouteDecision:
         prediction = self.ppm.predict(text, context)
@@ -104,6 +108,68 @@ class MOMRouter:
             score=score,
         )
         self.feedback.record(record)
+        self._feedback_since_train += 1
+        if self._feedback_since_train >= self._train_every:
+            self.train_ppm_from_feedback()
+
+    def train_ppm_from_feedback(self, records: Optional[list] = None) -> dict:
+        """Close the production loop: train PPM weights from actual outcomes.
+
+        Converts feedback records (prediction vs actual) into PPM training
+        records and applies online weight updates. Auto-triggered every
+        `train_every` feedback records; can also be called manually.
+        """
+        if records is None:
+            if not self.feedback:
+                return {"trained": 0, "reason": "no_feedback_collector"}
+            records = list(self.feedback._buffer) + self._drain_feedback_queue()
+
+        training_records = [
+            {
+                "predicted_difficulty": r.ppm_difficulty,
+                "actual_difficulty": self._infer_actual_difficulty(r),
+                "ppm_family": r.ppm_family,
+                "success": r.success,
+            }
+            for r in records
+        ]
+
+        result = self.ppm.train(training_records)
+        self._feedback_since_train = 0
+        self._train_cycles += 1
+        logger.info(
+            "PPM production training cycle %d: %d records, %d errors",
+            self._train_cycles, result.get("trained", 0), len(result.get("errors", [])),
+        )
+        return result
+
+    def _drain_feedback_queue(self) -> list:
+        if not self.feedback:
+            return []
+        drained = []
+        queue = self.feedback._queue
+        while not queue.empty():
+            try:
+                drained.append(queue.get_nowait())
+            except Exception:
+                break
+        return drained
+
+    @staticmethod
+    def _infer_actual_difficulty(record) -> float:
+        """Infer true task difficulty from outcome.
+
+        Failed tasks were harder than predicted; smooth successes were easier.
+        Score (0~1 quality) modulates the adjustment.
+        """
+        base = record.ppm_difficulty
+        if not record.success:
+            return min(1.0, base + 0.25)
+        if record.score >= 0.8:
+            return max(0.0, base - 0.15)
+        if record.score <= 0.4:
+            return min(1.0, base + 0.10)
+        return base
 
     def update_profile_from_feedback(self, model_id: str, success: bool, score: float) -> None:
         self.profile.update_success_rate(model_id, success)
@@ -124,4 +190,6 @@ class MOMRouter:
             "strategy": {
                 "tiers": [t.value for t in self.strategy.tiers],
             },
+            "feedback_since_train": self._feedback_since_train,
+            "train_cycles": self._train_cycles,
         }

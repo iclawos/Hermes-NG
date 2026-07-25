@@ -433,3 +433,27 @@ class TestRunServer:
     def test_run_server_import(self):
         from zilli.server.app import run_server
         assert callable(run_server)
+
+
+class TestTenants:
+    def test_list_tenants_initially_empty(self, client):
+        r = client.get("/v1/tenants")
+        assert r.status_code == 200
+        assert r.json()["tenants"] == []
+
+    def test_get_tenant_auto_registers(self, client):
+        r = client.get("/v1/tenants/acme")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["tenant_id"] == "acme"
+        assert data["monthly_budget_usd"] == 500.0
+
+    def test_tenant_appears_in_list_after_get(self, client):
+        client.get("/v1/tenants/acme")
+        r = client.get("/v1/tenants")
+        ids = [t["tenant_id"] for t in r.json()["tenants"]]
+        assert "acme" in ids
+
+    def test_invalid_tenant_id_rejected(self, client):
+        r = client.get("/v1/tenants/..%2Fevil")
+        assert r.status_code in (400, 422, 404)
