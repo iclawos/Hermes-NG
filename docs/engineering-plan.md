@@ -301,9 +301,9 @@ MetaLoopRunner.run(input_data)
 | P0 修复：dashboard st.secrets 无文件时崩溃 | `dashboard_app.py` | 0.5h | ✅ |
 
 遗留（诚实记录）：
-- 覆盖率 83.6% vs 目标 85%：剩余缺口在 vllm/llamacpp stream 方法（需真实流式服务）与 cli.py 长尾 handlers
-- Rust hotpath 尚未接 PyO3 绑定（maturin 构建链为下一阶段）
-- 多租户当前为单进程内存注册表，持久化租户配置加载为下一阶段
+- ~~覆盖率 83.6% vs 目标 85%~~ ✅ 已达 85.1%（1017 tests）
+- ~~Rust hotpath 尚未接 PyO3 绑定~~ ✅ `zilli-rs/src/bindings/` 已实现（optional `python-bindings` feature，`cargo check` 通过）。安装 wheel：`pip install maturin && cd zilli-rs && maturin develop --features python-bindings`（需要 pip 安装权限，未执行）
+- ~~多租户当前为单进程内存注册表~~ ✅ `TenantManager.from_yaml/save_yaml` 持久化已实现
 
 ### Release v1.0.0 标准
 
