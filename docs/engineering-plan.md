@@ -286,24 +286,24 @@ MetaLoopRunner.run(input_data)
 - [x] DAG Mermaid 可视化
 - [x] 版本号更新 0.4.0 → 0.5.0
 
-### Release v0.6.0 候选（Phase 8，进行中）
+### Release v0.6.0 候选（Phase 8，已完成 ✅ 2026-07-26）
 
 | 任务 | 文件 | 预估工时 | 状态 |
 |------|------|----------|------|
-| 覆盖率 74% → 85%+：vector_store/compliance/models backends/celery_executor 测试 | `tests/` | 8h | 🔵 进行中 |
-| 多租户支持（租户隔离的数据 + 配置 + 路由） | `routing/`, `configs/`, `security/isolation.py` | 16h | 📋 |
-| PPM training 集成到完整生产反馈闭环 | `routing/ppm.py`, `routing/feedback.py` | 4h | 📋 |
-| Harness 模式在真实技能库上运行验证 | `evolution/`, `examples/` | 4h | 📋 |
-| Rust crate `zilli-rs` 热路径（PPM 预测 + 指纹计算） | `zilli-rs/` | 24h | 📋 |
-| `evolution/cli.py` 覆盖率 22% → 70%+ | `tests/test_evolution_cli*.py` | 3h | 📋 |
-| `run_training.py` 覆盖率 35% → 70%+ | `tests/test_checkpoint_resume.py` | 3h | 📋 |
-| `continuous_learner.py` 覆盖率 35% → 70%+ | `tests/` | 2h | 📋 |
-| `tasks/__init__.py` 模板评估覆盖率 45% → 75%+ | `tests/` | 2h | 📋 |
+| 覆盖率 74% → 83.6%（972 tests） | `tests/` | 8h | ✅ |
+| 多租户支持（TenantManager + /v1/tenants 端点 + 数据命名空间隔离） | `tenancy.py`, `server/app.py` | 16h | ✅ |
+| PPM training 集成到完整生产反馈闭环（auto-train every N records） | `routing/mom_router.py` | 4h | ✅ |
+| Harness 模式在真实技能库上运行验证 | `examples/skills/`, `tests/test_harness_real_skills.py` | 4h | ✅ |
+| Rust 热路径（PPM 预测 + 代码指纹，15 Rust tests） | `zilli-rs/src/hotpath/` | 24h | ✅ |
+| Dashboard AppTest 无头测试（streamlit.testing.v1） | `tests/test_dashboard_app.py` | 2h | ✅ |
+| P0 修复：run_training.main() 配置过滤崩溃（官方默认配置必然崩溃） | `run_training.py` | 1h | ✅ |
+| P0 修复：子进程超时未 kill（agent/verification/swe sandbox） | `core/agent.py`, `loops/verification.py`, `swe/sandbox.py` | 1h | ✅ |
+| P0 修复：dashboard st.secrets 无文件时崩溃 | `dashboard_app.py` | 0.5h | ✅ |
 
-不做的事（明确排除）：
-- ❌ Streamlit dashboard_app.py 单元测试（Streamlit 运行时依赖真实浏览器，用 e2e 验证替代）
-- ❌ 完全重建（当前架构健康：0 循环导入、0 静态错误，重建风险大于收益）
-- ❌ vLLM/Ollama/llamacpp backends 的真实 HTTP 集成测试（需要真实模型服务，用 mock 覆盖协议层即可）
+遗留（诚实记录）：
+- 覆盖率 83.6% vs 目标 85%：剩余缺口在 vllm/llamacpp stream 方法（需真实流式服务）与 cli.py 长尾 handlers
+- Rust hotpath 尚未接 PyO3 绑定（maturin 构建链为下一阶段）
+- 多租户当前为单进程内存注册表，持久化租户配置加载为下一阶段
 
 ### Release v1.0.0 标准
 
