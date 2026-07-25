@@ -58,6 +58,11 @@ ppm = [
     "onnxruntime>=1.20",
     "skl2onnx>=1.17",
 ]
+ci = [
+    "zilli[server,workflow,vector,dev,ppm]",
+    "streamlit>=1.40",
+    "pyright>=1.1.400",
+]
 all = [
     "zilli[train,server,workflow,vector,dev,ppm]",
 ]
