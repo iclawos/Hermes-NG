@@ -1,10 +1,11 @@
 
 from zilli.routing.ppm import PPMPredictor, TaskFamily
+from zilli.routing.ppm_classifier import RegexClassifier
 
 
 class TestPPMPredictor:
     def setup_method(self):
-        self.ppm = PPMPredictor()
+        self.ppm = PPMPredictor(classifier=RegexClassifier())
 
     def test_chat_simple(self):
         pred = self.ppm.predict("Hello")

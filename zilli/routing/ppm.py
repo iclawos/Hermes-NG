@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import OrderedDict
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from zilli.routing.ppm_types import PPMPrediction, TaskFamily
@@ -41,9 +42,43 @@ class PPMPredictor:
     @property
     def classifier(self) -> PPMClassifier:
         if self._classifier is None:
-            from zilli.routing.ppm_classifier import RegexClassifier
-            self._classifier = RegexClassifier(difficulty_weights=self._difficulty_weights)
+            self._classifier = self._build_default_classifier()
         return self._classifier
+
+    def _build_default_classifier(self) -> PPMClassifier:
+        """Classifier chain: trained model (if available) → RegexClassifier (+Rust).
+
+        Model lookup order:
+          1. ZILLI_PPM_MODEL env var (joblib or onnx path)
+          2. ./ppm_model.joblib
+          3. ./models/ppm_model.joblib
+        """
+        import os
+
+        from zilli.routing.ppm_classifier import RegexClassifier
+
+        candidates = []
+        env_path = os.environ.get("ZILLI_PPM_MODEL", "")
+        if env_path:
+            candidates.append(env_path)
+        candidates.extend([
+            "./ppm_model.joblib",
+            "./models/ppm_model.joblib",
+            "./models/ppm_model_family.onnx",
+            "./ppm_model_family.onnx",
+        ])
+
+        for path in candidates:
+            if Path(path).exists():
+                try:
+                    from zilli.routing.ppm_classifier import SklearnONNXClassifier
+                    clf = SklearnONNXClassifier(model_path=path)
+                    logger.info("PPM using trained model: %s", path)
+                    return clf
+                except Exception as e:
+                    logger.warning("Failed to load PPM model %s: %s", path, e)
+
+        return RegexClassifier(difficulty_weights=self._difficulty_weights)
 
     def _feature_hash(self, text: str) -> int:
         return hash(text[:200].lower().strip())

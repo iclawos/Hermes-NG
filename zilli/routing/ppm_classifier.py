@@ -179,12 +179,19 @@ class RegexClassifier(PPMClassifier):
 
 
 class SklearnONNXClassifier(PPMClassifier):
+    """Model-based PPM classifier.
+
+    Two runtime formats:
+    - joblib: dict of sklearn Pipelines (text → tfidf → predict end-to-end)
+    - onnx:   two sessions (family + difficulty) taking raw string input
+    """
+
     def __init__(self, model_path: Optional[str] = None):
         self._model_path = model_path
-        self._pipeline: Any = None
-        self._session: Any = None
+        self._pipelines: Any = None
+        self._fam_session: Any = None
+        self._diff_session: Any = None
         self._metadata_cache: Optional[ClassifierMetadata] = None
-        self._label_encoder: Any = None
 
         if model_path:
             self._load(model_path)
@@ -203,14 +210,33 @@ class SklearnONNXClassifier(PPMClassifier):
                 data = json.load(f)
             self._metadata_cache = ClassifierMetadata(**data)
 
+        if p.suffix in (".joblib", ".pkl"):
+            import joblib
+            self._pipelines = joblib.load(model_path)
+            return
+
+        fam_path = p
+        diff_path = p.parent / f"{p.stem.replace('_family', '')}_difficulty.onnx"
+        if p.stem.endswith("_family"):
+            diff_path = p.parent / f"{p.stem[:-7]}_difficulty.onnx"
+        elif p.stem.endswith("_difficulty"):
+            fam_path = p.parent / f"{p.stem[:-11]}_family.onnx"
+
+        if not diff_path.exists() or not fam_path.exists():
+            raise FileNotFoundError(
+                f"ONNX model pair incomplete: need both *_family.onnx and *_difficulty.onnx "
+                f"(checked {fam_path}, {diff_path})"
+            )
+
         try:
             import onnxruntime as ort
-            self._session = ort.InferenceSession(str(model_path))
         except ImportError:
-            raise ImportError("onnxruntime is required for SklearnONNXClassifier")
+            raise ImportError("onnxruntime is required for ONNX inference")
+        self._fam_session = ort.InferenceSession(str(fam_path))
+        self._diff_session = ort.InferenceSession(str(diff_path))
 
     def _ensure_loaded(self) -> None:
-        if self._session is None:
+        if self._pipelines is None and self._fam_session is None:
             raise RuntimeError("Model not loaded. Call load() or provide model_path.")
 
     def metadata(self) -> ClassifierMetadata:
@@ -226,40 +252,58 @@ class SklearnONNXClassifier(PPMClassifier):
 
     def classify(self, text: str, context: Optional[dict] = None) -> PPMPrediction:
         self._ensure_loaded()
-        features = self._vectorize(text)
-        return self._predict_onnx(features)
+        if self._pipelines is not None:
+            return self._predict_joblib(text)
+        return self._predict_onnx(text)
 
-    def _vectorize(self, text: str) -> np.ndarray:
-        try:
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            vec = TfidfVectorizer(ngram_range=(1, 3), max_features=5000, sublinear_tf=True)
-            mat = vec.fit_transform([text])  # type: ignore[reportAttributeAccessIssue]
-            if hasattr(mat, "toarray"):
-                return mat.toarray().astype(np.float32)  # type: ignore[reportAttributeAccessIssue]
-            return np.asarray(mat.todense(), dtype=np.float32)  # type: ignore[reportAttributeAccessIssue]
-        except ImportError:
-            raise ImportError("sklearn is required for feature vectorization")
+    def _predict_joblib(self, text: str) -> PPMPrediction:
+        family_clf = self._pipelines["family_clf"]
+        diff_reg = self._pipelines["diff_reg"]
 
-    def _predict_onnx(self, features: np.ndarray) -> PPMPrediction:
-        input_name = self._session.get_inputs()[0].name
-        outputs = self._session.run(None, {input_name: features})
+        family = str(family_clf.predict([text])[0])
+        difficulty = float(diff_reg.predict([text])[0])
 
-        family_probs = outputs[0][0]
-        difficulty = float(outputs[1][0][0])
-        family = self._probs_to_family(family_probs)
-        confidence = float(max(family_probs))
+        if hasattr(family_clf, "predict_proba"):
+            probs = family_clf.predict_proba([text])[0]
+            confidence = float(probs.max())
+        else:
+            confidence = 0.8
 
         return PPMPrediction(
             difficulty=max(0.0, min(1.0, difficulty)),
-            task_family=family,
+            task_family=TaskFamily(family) if family in TaskFamily._value2member_map_ else TaskFamily.UNKNOWN,
             confidence=confidence,
         )
 
-    @staticmethod
-    def _probs_to_family(probs: np.ndarray) -> TaskFamily:
-        families = list(TaskFamily)
-        idx = int(np.argmax(probs))
-        return families[idx] if idx < len(families) else TaskFamily.UNKNOWN
+    def _predict_onnx(self, text: str) -> PPMPrediction:
+        inp_f = self._fam_session.get_inputs()[0].name
+        inp_d = self._diff_session.get_inputs()[0].name
+        text_arr = np.array([[text]], dtype=object)
+
+        fam_out = self._fam_session.run(None, {inp_f: text_arr})
+        diff_out = self._diff_session.run(None, {inp_d: text_arr})
+
+        family_label = fam_out[0][0]
+        family = str(family_label if not isinstance(family_label, bytes) else family_label.decode())
+
+        difficulty_raw = diff_out[0]
+        difficulty = float(np.ravel(difficulty_raw)[0])
+
+        confidence = 0.8
+        if len(fam_out) > 1:
+            probs_raw = fam_out[1][0]
+            if isinstance(probs_raw, dict):
+                probs = np.array(list(probs_raw.values()), dtype=float)
+            else:
+                probs = np.ravel(probs_raw)
+            if len(probs):
+                confidence = float(np.max(probs))
+
+        return PPMPrediction(
+            difficulty=max(0.0, min(1.0, difficulty)),
+            task_family=TaskFamily(family) if family in TaskFamily._value2member_map_ else TaskFamily.UNKNOWN,
+            confidence=confidence,
+        )
 
     @classmethod
     def train(

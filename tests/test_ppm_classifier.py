@@ -158,4 +158,4 @@ class TestClassifierIntegration:
         p = PPMPredictor()
         pred = p.predict("hello")
         assert pred.task_family == TaskFamily.CHAT
-        assert p.stats()["classifier"] in ("regex", "regex+rust")
+        assert p.stats()["classifier"] in ("regex", "regex+rust", "sklearn_onnx")

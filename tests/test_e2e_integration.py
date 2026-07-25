@@ -66,7 +66,8 @@ async def test_route_feedback_evolve_cycle(tmp_path: Path):
 
 async def test_multi_cycle_ppm_training_loop(tmp_path: Path):
     """Route 5 requests -> collect feedback -> train PPM -> verify weights changed."""
-    ppm = PPMPredictor(learning_rate=0.5)
+    from zilli.routing.ppm_classifier import RegexClassifier
+    ppm = PPMPredictor(learning_rate=0.5, classifier=RegexClassifier())
     profile = ModelProfile(exploration_factor=0.0)
     profile.register(ModelEntry(
         name="default", model_id="default-model",
@@ -76,7 +77,6 @@ async def test_multi_cycle_ppm_training_loop(tmp_path: Path):
     strategy = StrategySelector()
     router = MOMRouter(ppm=ppm, profile=profile, strategy=strategy, feedback=None)
 
-    from zilli.routing.ppm_classifier import RegexClassifier
     assert isinstance(ppm.classifier, RegexClassifier)
 
     weights_before = {}

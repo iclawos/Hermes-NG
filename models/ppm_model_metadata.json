@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "num_samples": 320,
+  "accuracy": 1.0,
+  "feature_dim": 5000,
+  "exported_at": "2026-07-25T17:07:32"
+}
