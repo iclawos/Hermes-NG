@@ -23,7 +23,7 @@ class TestPPMClassifierABC:
 class TestRegexClassifier:
     def test_name(self):
         c = RegexClassifier()
-        assert c.name == "regex"
+        assert c.name in ("regex", "regex+rust")
 
     def test_simple_chat(self):
         c = RegexClassifier()
@@ -150,7 +150,7 @@ class TestClassifierIntegration:
         p = PPMPredictor(classifier=RegexClassifier())
         pred = p.predict("def foo(): return 1")
         assert pred.task_family == TaskFamily.CODING
-        assert p.stats()["classifier"] == "regex"
+        assert p.stats()["classifier"] in ("regex", "regex+rust")
 
     def test_ppm_default_uses_regex(self):
         from zilli.routing.ppm import PPMPredictor
@@ -158,4 +158,4 @@ class TestClassifierIntegration:
         p = PPMPredictor()
         pred = p.predict("hello")
         assert pred.task_family == TaskFamily.CHAT
-        assert p.stats()["classifier"] == "regex"
+        assert p.stats()["classifier"] in ("regex", "regex+rust")

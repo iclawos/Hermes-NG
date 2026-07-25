@@ -16,6 +16,15 @@ from zilli.routing.ppm_types import PPMPrediction, TaskFamily
 logger = logging.getLogger("zilli.routing.ppm_classifier")
 
 
+def _try_import_rust():
+    """Import the Rust hotpath extension if installed."""
+    try:
+        import zilli_hotpath  # type: ignore[import-not-found]
+        return zilli_hotpath
+    except ImportError:
+        return None
+
+
 _SIMPLE_PATTERNS = re.compile(
     r"(?i)^(你好|hello|hi|hey|bye|thanks|yes|no|ok|good|bad|\d+\s*[+\-*/]\s*\d+)$"
 )
@@ -78,10 +87,11 @@ class RegexClassifier(PPMClassifier):
             "creative": {"length_weight": 1.0},
             "unknown": {"length_weight": 1.0},
         }
+        self._rust = _try_import_rust()
 
     @property
     def name(self) -> str:
-        return "regex"
+        return "regex+rust" if self._rust else "regex"
 
     def metadata(self) -> ClassifierMetadata:
         return ClassifierMetadata(
@@ -93,6 +103,16 @@ class RegexClassifier(PPMClassifier):
         )
 
     def classify(self, text: str, context: Optional[dict] = None) -> PPMPrediction:
+        if self._rust is not None:
+            try:
+                p = self._rust.ppm_predict(text)  # type: ignore[attr-defined]
+                return PPMPrediction(
+                    difficulty=p.difficulty,
+                    task_family=TaskFamily(p.task_family),
+                    confidence=p.confidence,
+                )
+            except Exception:
+                pass
         family = self._predict_family(text)
         difficulty = self._predict_difficulty(text, family)
         confidence = self._estimate_confidence(text)
