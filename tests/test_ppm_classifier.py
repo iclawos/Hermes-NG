@@ -114,11 +114,11 @@ class TestSklearnONNXClassifier:
             output = str(Path(d) / "ppm_model.onnx")
             result = SklearnONNXClassifier.train(sample_records, output_path=output)
             assert result["num_samples"] == 10
+            # char_wb analyzer is not ONNX-convertible: expect joblib fallback
             family_path = Path(d) / "ppm_model_family.onnx"
-            diff_path = Path(d) / "ppm_model_difficulty.onnx"
+            joblib_path = Path(d) / "ppm_model.joblib"
             meta_path = Path(d) / "ppm_model_metadata.json"
-            assert family_path.exists()
-            assert diff_path.exists()
+            assert family_path.exists() or joblib_path.exists()
             assert meta_path.exists()
             with open(meta_path) as f:
                 meta = json.load(f)
@@ -127,11 +127,14 @@ class TestSklearnONNXClassifier:
 
     def test_load_and_classify(self, sample_records):
         with tempfile.TemporaryDirectory() as d:
-            output = str(Path(d) / "ppm_model.onnx")
+            output = str(Path(d) / "ppm_model.joblib")
             SklearnONNXClassifier.train(sample_records, output_path=output)
 
-            classifier = SklearnONNXClassifier(str(Path(d) / "ppm_model_family.onnx"))
+            classifier = SklearnONNXClassifier(output)
             assert classifier.name == "sklearn_onnx"
+            pred = classifier.classify("hello")
+            assert pred.task_family is not None
+            assert 0.0 <= pred.difficulty <= 1.0
 
     def test_train_classifier_function(self, sample_records):
         with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as f:

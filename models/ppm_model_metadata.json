@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "num_samples": 320,
+  "version": "2.0.0",
+  "num_samples": 2565,
   "accuracy": 1.0,
-  "feature_dim": 5000,
-  "exported_at": "2026-07-25T17:07:32"
+  "feature_dim": 8000,
+  "exported_at": "2026-07-25T18:30:28"
 }

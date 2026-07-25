@@ -204,11 +204,15 @@ class SklearnONNXClassifier(PPMClassifier):
         p = Path(model_path)
         if not p.exists():
             raise FileNotFoundError(f"Model not found: {model_path}")
-        metadata_path = p.parent / f"{p.stem}_metadata.json"
-        if metadata_path.exists():
-            with open(metadata_path) as f:
-                data = json.load(f)
-            self._metadata_cache = ClassifierMetadata(**data)
+        for meta_candidate in (
+            p.parent / f"{p.stem}_metadata.json",
+            p.parent / f"{p.stem.replace('_family', '').replace('_difficulty', '')}_metadata.json",
+        ):
+            if meta_candidate.exists():
+                with open(meta_candidate) as f:
+                    data = json.load(f)
+                self._metadata_cache = ClassifierMetadata(**data)
+                break
 
         if p.suffix in (".joblib", ".pkl"):
             import joblib
@@ -337,43 +341,51 @@ class SklearnONNXClassifier(PPMClassifier):
         )
 
         family_clf = Pipeline([
-            ("tfidf", TfidfVectorizer(ngram_range=(1, 3), max_features=5000, sublinear_tf=True)),
+            ("tfidf", TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 5),
+                                      max_features=8000, sublinear_tf=True)),
             ("clf", LogisticRegression(max_iter=1000, C=1.0)),
         ])
         family_clf.fit(texts_train, fam_train)
         fam_acc = accuracy_score(fam_test, family_clf.predict(texts_test))
 
         diff_reg = Pipeline([
-            ("tfidf", TfidfVectorizer(ngram_range=(1, 3), max_features=5000, sublinear_tf=True)),
+            ("tfidf", TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 5),
+                                      max_features=8000, sublinear_tf=True)),
             ("reg", Ridge(alpha=1.0)),
         ])
         diff_reg.fit(texts_train, diff_train)
         diff_mse = mean_squared_error(diff_test, diff_reg.predict(texts_test))
 
+        onnx_ok = False
         if convert_sklearn is not None:
-            initial_type = [("text", StringTensorType([1, 1]))]  # type: ignore
-            family_onnx = convert_sklearn(family_clf, initial_types=initial_type)
-            diff_onnx = convert_sklearn(diff_reg, initial_types=initial_type)
+            try:
+                initial_type = [("text", StringTensorType([1, 1]))]  # type: ignore
+                family_onnx = convert_sklearn(family_clf, initial_types=initial_type)
+                diff_onnx = convert_sklearn(diff_reg, initial_types=initial_type)
 
-            with tempfile.TemporaryDirectory() as tmp:
-                fam_path = Path(tmp) / "family.onnx"
-                diff_path = Path(tmp) / "difficulty.onnx"
-                with open(fam_path, "wb") as f:
-                    f.write(family_onnx.SerializeToString())  # type: ignore[attr-defined]
-                with open(diff_path, "wb") as f:
-                    f.write(diff_onnx.SerializeToString())  # type: ignore[attr-defined]
+                with tempfile.TemporaryDirectory() as tmp:
+                    fam_path = Path(tmp) / "family.onnx"
+                    diff_path = Path(tmp) / "difficulty.onnx"
+                    with open(fam_path, "wb") as f:
+                        f.write(family_onnx.SerializeToString())  # type: ignore[attr-defined]
+                    with open(diff_path, "wb") as f:
+                        f.write(diff_onnx.SerializeToString())  # type: ignore[attr-defined]
 
-                out = Path(output_path)
-                out.parent.mkdir(parents=True, exist_ok=True)
-                import shutil
-                shutil.copy2(fam_path, out.parent / f"{out.stem}_family.onnx")
-                shutil.copy2(diff_path, out.parent / f"{out.stem}_difficulty.onnx")
+                    out = Path(output_path)
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    import shutil
+                    shutil.copy2(fam_path, out.parent / f"{out.stem}_family.onnx")
+                    shutil.copy2(diff_path, out.parent / f"{out.stem}_difficulty.onnx")
+                onnx_ok = True
+            except (NotImplementedError, ValueError, RuntimeError) as e:
+                logger.warning("ONNX export unavailable (%s) — falling back to joblib", e)
 
+        if onnx_ok:
             metadata = ClassifierMetadata(
                 version="1.0.0",
                 num_samples=len(records),
                 accuracy=round(float(fam_acc), 4),
-                feature_dim=5000,
+                feature_dim=8000,
                 exported_at=__import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
             )
             meta_path = out.parent / f"{out.stem}_metadata.json"
@@ -382,8 +394,21 @@ class SklearnONNXClassifier(PPMClassifier):
         else:
             import joblib
             out = Path(output_path)
+            if out.suffix == ".onnx":
+                out = out.with_suffix(".joblib")
+                output_path = str(out)
             out.parent.mkdir(parents=True, exist_ok=True)
             joblib.dump({"family_clf": family_clf, "diff_reg": diff_reg}, output_path)
+            metadata = ClassifierMetadata(
+                version="1.0.0",
+                num_samples=len(records),
+                accuracy=round(float(fam_acc), 4),
+                feature_dim=8000,
+                exported_at=__import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
+            )
+            meta_path = out.parent / f"{out.stem}_metadata.json"
+            with open(meta_path, "w") as f:
+                json.dump(metadata.__dict__, f, indent=2)
 
         return {
             "num_samples": len(records),
