@@ -1,5 +1,10 @@
-from zilli.privacy.policy import (CLASS_LEVEL, CloudProvider, DataClass,
-                                  DataGovernancePolicy, PolicyStore)
+from zilli.privacy.policy import (
+    CLASS_LEVEL,
+    CloudProvider,
+    DataClass,
+    DataGovernancePolicy,
+    PolicyStore,
+)
 
 
 class TestDataGovernancePolicy:
