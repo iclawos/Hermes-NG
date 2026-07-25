@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 
 from zilli.swe.sandbox import Sandbox, SandboxConfig
 
