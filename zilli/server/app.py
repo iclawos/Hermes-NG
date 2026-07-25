@@ -85,8 +85,10 @@ class ZilliAppState:
         self.classifier: RouteClassifier = None  # type: ignore[assignment]
         self.router: LocalHybridRouter = None  # type: ignore[assignment]
         self.privacy: PrivacyEngine = None  # type: ignore[assignment]
+        from zilli.audit import AuditLogger
         from zilli.tenancy import TenantManager
         self.tenants: TenantManager = None  # type: ignore[assignment]
+        self.audit: AuditLogger = None  # type: ignore[assignment]
         self.cost_controller = None
         self.api_keys: set[str] = set()
         self.rate_limiter = RateLimiter()
@@ -108,6 +110,9 @@ class ZilliAppState:
         if self.config is not None:
             from zilli.envs.cost_controller import CostController
             self.cost_controller = CostController(config=self.config)
+
+        from zilli.audit import AuditLogger
+        self.audit = AuditLogger(config=self.config)
 
         from zilli.tenancy import TenantManager
         self.tenants = TenantManager()
@@ -269,6 +274,13 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
 
         duration = (time.monotonic() - start) * 1000
 
+        state.audit.route_decision(
+            route_type=result.route_type.value,
+            request=input_text,
+            reason=result.decision.reason,
+            tenant_id=tenant_ctx.tenant_id,
+        )
+
         return RouteResponse(
             final_text=result.final_text,
             route_type=result.route_type.value,
@@ -425,6 +437,16 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
         response_text = result.final_text or ""
 
         _metrics["tokens_total"] += (result.executor_tokens or len(prompt) // 4) + len(response_text) // 4
+
+        state.audit.model_call(
+            model_name="router",
+            prompt=prompt,
+            response=response_text,
+            tokens_in=result.executor_tokens or 0,
+            duration_ms=(time.monotonic() - start) * 1000,
+            tenant_id=x_tenant_id,
+            success=result.error is None,
+        )
 
         return ChatCompletionResponse(
             id=f"chatcmpl-{int(start)}",

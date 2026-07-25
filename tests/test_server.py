@@ -457,3 +457,30 @@ class TestTenants:
     def test_invalid_tenant_id_rejected(self, client):
         r = client.get("/v1/tenants/..%2Fevil")
         assert r.status_code in (400, 422, 404)
+
+
+class TestAuditTrail:
+    def test_route_writes_audit_log(self, client, tmp_path, monkeypatch):
+        import os
+        monkeypatch.chdir(tmp_path)
+        from zilli.server.app import create_app
+        from fastapi.testclient import TestClient
+        with TestClient(create_app()) as c:
+            c.post("/v1/route", json={"request": "hello world"})
+        audit_files = list((tmp_path / "audit_logs").glob("audit_*.jsonl"))
+        assert audit_files, "audit log should be written"
+        content = audit_files[0].read_text()
+        assert "route_decision" in content
+
+    def test_chat_writes_model_call_audit(self, client, tmp_path, monkeypatch):
+        import os
+        monkeypatch.chdir(tmp_path)
+        from zilli.server.app import create_app
+        from fastapi.testclient import TestClient
+        with TestClient(create_app()) as c:
+            c.post("/v1/chat/completions",
+                   json={"messages": [{"role": "user", "content": "hi"}]})
+        audit_files = list((tmp_path / "audit_logs").glob("audit_*.jsonl"))
+        assert audit_files
+        content = audit_files[0].read_text()
+        assert "model_call" in content
