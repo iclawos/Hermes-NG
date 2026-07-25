@@ -157,6 +157,24 @@ def main():
     unknowns_pitch = unknowns_sub.add_parser("pitch", help="打包评审文档")
     unknowns_pitch.add_argument("title", type=str, help="文档标题")
 
+    soak_parser = sub.add_parser("soak", help="端到端自进化闭环持续运行（生产验证）")
+    soak_parser.add_argument("--skills-dir", type=str, default="./examples/skills",
+                             help="技能目录")
+    soak_parser.add_argument("--trajectories-dir", type=str, default="",
+                             help="轨迹数据目录")
+    soak_parser.add_argument("--interval", type=float, default=300.0,
+                             help="循环间隔秒数（默认 300）")
+    soak_parser.add_argument("--duration", type=float, default=0.0,
+                             help="最长运行秒数（0 = 无限）")
+    soak_parser.add_argument("--status", type=str, default="./soak_status.json",
+                             help="健康状态文件路径")
+    soak_parser.add_argument("--metrics", type=str, default="./soak_metrics.jsonl",
+                             help="指标日志路径")
+    soak_parser.add_argument("--stop-file", type=str, default="",
+                             help="停止信号文件（存在即停）")
+    soak_parser.add_argument("--log-dir", type=str, default="./experiments",
+                             help="训练日志目录")
+
     args = parser.parse_args()
 
     from zilli.configs import load_config
@@ -242,6 +260,8 @@ def main():
         _run_pipeline(args)
     elif args.command == "ppm":
         _run_ppm(args)
+    elif args.command == "soak":
+        _run_soak(args)
     elif args.command == "audit":
         _run_audit(args)
     elif args.command == "unknowns":
@@ -707,6 +727,46 @@ def _run_swe(args: argparse.Namespace):
             print(result.context.summarize()[:1000])
 
     asyncio.run(run())
+
+
+def _run_soak(args: argparse.Namespace):
+    import asyncio
+
+    from zilli.evolution.diversity import DiversityController
+    from zilli.evolution.skill_evolution import SkillEvolutionEngine
+    from zilli.pipeline.evolve_to_train import EvolveToTrainPipeline, EvolveTrainConfig
+    from zilli.soak import SoakRunner
+    from zilli.training.rl_trainer import RLTrainer
+
+    config = EvolveTrainConfig(
+        skills_dir=args.skills_dir,
+        trajectories_dir=args.trajectories_dir,
+        log_dir=args.log_dir,
+    )
+    engine = SkillEvolutionEngine(diversity_controller=DiversityController())
+    trainer = RLTrainer({})
+    pipeline = EvolveToTrainPipeline(config=config, evolution_engine=engine, trainer=trainer)
+
+    runner = SoakRunner(
+        pipeline,
+        interval_sec=args.interval,
+        status_path=args.status,
+        metrics_path=args.metrics,
+    )
+
+    print(f"Soak runner starting: interval={args.interval}s, "
+          f"duration={'∞' if args.duration == 0 else f'{args.duration}s'}")
+    print(f"Status: {args.status} | Metrics: {args.metrics}")
+    if args.stop_file:
+        print(f"Stop file: {args.stop_file} (touch to stop)")
+
+    health = asyncio.run(runner.run(
+        max_duration_sec=args.duration or None,
+        stop_file=args.stop_file or None,
+    ))
+
+    print("\n=== Soak Summary ===")
+    print(json.dumps(health.to_dict(), indent=2))
 
 
 def _run_unknowns(args: argparse.Namespace):

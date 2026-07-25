@@ -461,10 +461,10 @@ class TestTenants:
 
 class TestAuditTrail:
     def test_route_writes_audit_log(self, client, tmp_path, monkeypatch):
-        import os
         monkeypatch.chdir(tmp_path)
-        from zilli.server.app import create_app
         from fastapi.testclient import TestClient
+
+        from zilli.server.app import create_app
         with TestClient(create_app()) as c:
             c.post("/v1/route", json={"request": "hello world"})
         audit_files = list((tmp_path / "audit_logs").glob("audit_*.jsonl"))
@@ -473,10 +473,10 @@ class TestAuditTrail:
         assert "route_decision" in content
 
     def test_chat_writes_model_call_audit(self, client, tmp_path, monkeypatch):
-        import os
         monkeypatch.chdir(tmp_path)
-        from zilli.server.app import create_app
         from fastapi.testclient import TestClient
+
+        from zilli.server.app import create_app
         with TestClient(create_app()) as c:
             c.post("/v1/chat/completions",
                    json={"messages": [{"role": "user", "content": "hi"}]})

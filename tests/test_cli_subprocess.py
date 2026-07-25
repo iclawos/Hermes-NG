@@ -15,7 +15,7 @@ class TestCLIBasics:
     def test_version(self):
         r = _run_cli("--version")
         assert r.returncode == 0
-        assert "0.5.0" in r.stdout
+        assert "1.0.0" in r.stdout
 
     def test_no_args_shows_help(self):
         r = _run_cli()
