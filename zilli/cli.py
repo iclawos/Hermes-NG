@@ -145,6 +145,17 @@ def main():
     unknowns_resolve = unknowns_sub.add_parser("resolve", help="标记未知项为已解决")
     unknowns_resolve.add_argument("id", type=str, help="未知项ID")
     unknowns_resolve.add_argument("resolution", type=str, help="解决方案描述")
+    unknowns_brainstorm = unknowns_sub.add_parser("brainstorm", help="生成差异化解法草案")
+    unknowns_brainstorm.add_argument("task", type=str, help="任务描述")
+    unknowns_brainstorm.add_argument("--variants", type=int, default=4, help="草案数量")
+    unknowns_reference = unknowns_sub.add_parser("reference", help="提炼参考实现语义")
+    unknowns_reference.add_argument("path", type=str, help="参考文件/目录路径")
+    unknowns_reference.add_argument("--goal", type=str, default="", help="提炼目标")
+    unknowns_plan = unknowns_sub.add_parser("plan", help="生成实施计划")
+    unknowns_plan.add_argument("task", type=str, help="任务描述")
+    unknowns_plan.add_argument("--context", type=str, default="", help="上下文/代码摘要")
+    unknowns_pitch = unknowns_sub.add_parser("pitch", help="打包评审文档")
+    unknowns_pitch.add_argument("title", type=str, help="文档标题")
 
     args = parser.parse_args()
 
@@ -725,7 +736,7 @@ def _run_unknowns(args: argparse.Namespace):
         else:
             print(f"Unknown {args.id} not found.")
 
-    elif args.unknowns_command in ("blind-spot", "interview"):
+    elif args.unknowns_command in ("blind-spot", "interview", "brainstorm", "reference", "plan"):
         async def run():
             from zilli.models import ModelRegistry
 
@@ -770,7 +781,33 @@ def _run_unknowns(args: argparse.Namespace):
                 for i, q in enumerate(questions, 1):
                     print(f"{i}. {q}")
 
+            elif args.unknowns_command == "brainstorm":
+                variants = await discovery.brainstorm(args.task, llm_fn, num_variants=args.variants)
+                print("\nBrainstorm Variants")
+                print("=" * 50)
+                for i, v in enumerate(variants, 1):
+                    print(f"\n{i}. {v.get('name', 'Variant')} [{v.get('cost', '?')} cost]")
+                    print(f"   {v.get('pitch', '')}")
+                    print(f"   Tradeoff: {v.get('tradeoff', '')}")
+                    print(f"   Prototype: {v.get('prototype_step', '')}")
+
+            elif args.unknowns_command == "reference":
+                brief = await discovery.distill_reference(args.path, llm_fn, goal=args.goal)
+                print("\nReference Brief")
+                print("=" * 50)
+                print(brief)
+
+            elif args.unknowns_command == "plan":
+                plan = await discovery.generate_plan(args.task, args.context, llm_fn)
+                print(plan)
+                print(f"\nSaved to: {discovery.work_dir}/implementation-plan.md")
+
         asyncio.run(run())
+
+    elif args.unknowns_command == "pitch":
+        pitch = asyncio.run(discovery.package_pitch(args.title))
+        print(pitch)
+        print(f"\nSaved to: {discovery.work_dir}/pitch.md")
 
 
 def _run_audit(args: argparse.Namespace):

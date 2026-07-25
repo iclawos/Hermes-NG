@@ -293,6 +293,174 @@ Format as JSON:
         except (json.JSONDecodeError, TypeError):
             return []
 
+    async def brainstorm(
+        self,
+        task_description: str,
+        llm_fn: Callable[[str], Coroutine[Any, Any, str]],
+        num_variants: int = 4,
+    ) -> list[dict[str, str]]:
+        """Generate diverse solution prototypes for reactive selection.
+
+        Surfaces unknown knowns — criteria the user can only define when
+        they see it. Cheap prototypes before expensive implementation.
+        """
+        prompt = f"""Brainstorm {num_variants} WILDLY DIFFERENT approaches for this task.
+
+Task: {task_description}
+
+Requirements for each variant:
+- Radically different from each other (not minor tweaks)
+- Include a one-line pitch, key tradeoff, and cheapest prototype step
+- Order from cheapest to most ambitious
+
+Format as JSON array:
+[
+    {{"name": "...", "pitch": "...", "tradeoff": "...", "prototype_step": "...", "cost": "low|medium|high"}}
+]"""
+
+        response = await llm_fn(prompt)
+        try:
+            data = json.loads(response)
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            import re
+            json_match = re.search(r'\[.*\]', response, re.DOTALL)
+            if json_match:
+                try:
+                    return json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    pass
+        return []
+
+    async def distill_reference(
+        self,
+        reference_path: str,
+        llm_fn: Callable[[str], Coroutine[Any, Any, str]],
+        goal: str = "",
+        max_chars: int = 8000,
+    ) -> str:
+        """Read a reference implementation and distill its semantics.
+
+        Source code is the richest reference — richer than screenshots or
+        prose descriptions of desired behavior.
+        """
+        path = Path(reference_path)
+        if path.is_dir():
+            chunks = []
+            for f in sorted(path.rglob("*")):
+                if f.is_file() and f.suffix in (".py", ".rs", ".ts", ".js", ".go", ".md", ".toml"):
+                    try:
+                        chunks.append(f"--- {f.relative_to(path)} ---\n{f.read_text(errors='replace')[:2000]}")
+                    except OSError:
+                        continue
+                if sum(len(c) for c in chunks) > max_chars:
+                    break
+            content = "\n".join(chunks)[:max_chars]
+        elif path.is_file():
+            content = path.read_text(errors="replace")[:max_chars]
+        else:
+            return f"Reference not found: {reference_path}"
+
+        prompt = f"""Distill the KEY SEMANTICS of this reference implementation.
+
+Goal: {goal or 'understand what behavior to replicate'}
+
+Reference content:
+{content}
+
+Extract:
+1. Core behavior/semantics worth replicating (be precise: algorithms, state machines, protocols)
+2. Key design decisions and their rationale
+3. Edge cases handled
+4. A one-paragraph "implementation brief" usable as prompt context
+
+Be concise. Output plain text."""
+
+        return await llm_fn(prompt)
+
+    async def generate_plan(
+        self,
+        task_description: str,
+        context: str,
+        llm_fn: Callable[[str], Coroutine[Any, Any, str]],
+    ) -> str:
+        """Generate an implementation plan with volatile decisions first.
+
+        Lead with decisions the user is most likely to tweak: data models,
+        type interfaces, UX flows. Bury mechanical refactoring at the bottom.
+        """
+        prompt = f"""Write an implementation plan for this task.
+
+Task: {task_description}
+
+Context:
+{context}
+
+Structure (STRICT order):
+## 1. Decisions You'll Want to Tweak
+Lead with data model changes, new type interfaces, and anything user-facing.
+For each: the decision, the alternatives, and the default choice.
+
+## 2. UX / Behavior Flow
+Step-by-step user-visible behavior.
+
+## 3. Implementation Steps
+Ordered, mechanical. Trust the engineer on these.
+
+## 4. Risks & Edge Cases
+What could go wrong, mitigation per item.
+
+Output Markdown."""
+
+        plan = await llm_fn(prompt)
+        plan_path = self.work_dir / "implementation-plan.md"
+        plan_path.write_text(plan, encoding="utf-8")
+        return plan
+
+    async def package_pitch(
+        self,
+        title: str,
+        llm_fn: Callable[[str], Coroutine[Any, Any, str]] | None = None,
+    ) -> str:
+        """Package spec, plan, and implementation notes into a single doc.
+
+        Accelerates reviewer understanding and buy-in approvals.
+        """
+        notes = self.get_notes()
+        deviations = self.get_notes(deviation_only=True)
+        unresolved = self.get_unresolved()
+
+        plan_path = self.work_dir / "implementation-plan.md"
+        plan_text = plan_path.read_text(encoding="utf-8") if plan_path.exists() else "(no plan)"
+
+        notes_md = "\n".join(
+            f"- **{n.category}** {'(DEVIATION) ' if n.deviation else ''}{n.decision} — {n.reason}"
+            for n in notes
+        ) or "(no decisions logged)"
+
+        unknowns_md = "\n".join(
+            f"- [{u.category.value}] {u.description}" for u in unresolved
+        ) or "(all unknowns resolved)"
+
+        pitch = f"""# {title}
+
+## Implementation Plan
+{plan_text}
+
+## Decision Log ({len(notes)} decisions, {len(deviations)} deviations)
+{notes_md}
+
+## Open Unknowns ({len(unresolved)})
+{unknowns_md}
+
+---
+Generated by Zilli UnknownsDiscovery · {time.strftime('%Y-%m-%d %H:%M')}
+"""
+        pitch_path = self.work_dir / "pitch.md"
+        pitch_path.write_text(pitch, encoding="utf-8")
+        return pitch
+
     def resolve_unknown(self, unknown_id: str, resolution: str) -> bool:
         """Mark an unknown as resolved."""
         for u in self._unknowns:

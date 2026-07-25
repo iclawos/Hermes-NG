@@ -173,6 +173,16 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 - **机制**: `TaskDAG.to_mermaid()` — 节点状态着色（completed/failed/running/skipped）
 - **验收标准**: 输出合法 Mermaid 语法
 
+#### F-23 未知项全生命周期工作流
+- **描述**: 补全 Fable 方法论的实施前/后环节，覆盖 brainstorm → reference → plan → pitch 全流程
+- **机制**:
+  - **Brainstorm/Prototype**: `unknowns brainstorm <task>` — 生成 N 个差异化解法草案（廉价原型），供反应式筛选，暴露 unknown knowns
+  - **References**: `unknowns reference <path>` — 读取参考实现（源码/文档），提炼语义注入 prompt 上下文
+  - **Implementation Plan**: `unknowns plan` — 生成实施计划，前置最易被修改的决策（数据模型、类型接口、UX 流），机械性重构置底
+  - **Pitch Packager**: `unknowns pitch` — 打包 prototype + spec + implementation notes 为单文档（评审/共识），测验及格方可合并
+- **Loop 衔接**: plan 输出作为 `LoopRunner` 输入契约；notes 的 deviation 流回 `CycleMemory` 成为训练信号
+- **验收标准**: 四方法与 Loop 引擎集成测试通过
+
 ## 4. 非功能需求
 
 | 需求 | 目标 | 当前状态 | 衡量方式 |
