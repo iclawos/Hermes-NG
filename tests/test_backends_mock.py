@@ -137,3 +137,106 @@ class TestLlamaCppGenerate:
         b = LlamaCppBackend(name="t", model_id="m")
         b._client = _FakeClient(_FakeResponse(200, {"status": "ok"}))
         assert _run(b.health_check()) is True
+
+
+class _FakeStreamResponse:
+    def __init__(self, status=200, lines=None):
+        self.status_code = status
+        self._lines = lines or []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    def aiter_lines(self):
+        async def _gen():
+            for line in self._lines:
+                yield line
+        return _gen()
+
+
+class _FakeStreamClient:
+    def __init__(self, stream_response):
+        self._stream_response = stream_response
+
+    def stream(self, method, url, json=None):
+        return self._stream_response
+
+
+def _collect(gen):
+    async def _go():
+        chunks = []
+        async for c in gen:
+            chunks.append(c)
+        return chunks
+    return asyncio.run(_go())
+
+
+class TestVLLMStream:
+    def test_stream_yields_deltas(self):
+        b = VLLMBackend(name="t", model_id="m")
+        lines = [
+            'data: {"choices": [{"text": "Hello"}]}',
+            'data: {"choices": [{"text": " world"}]}',
+            "",
+            ": comment",
+            'data: {"choices": [{}]}',
+            "data: [DONE]",
+        ]
+        b._client = _FakeStreamClient(_FakeStreamResponse(200, lines))
+        chunks = _collect(b.generate_stream("hi"))
+        assert chunks == ["Hello", " world"]
+
+    def test_stream_http_error(self):
+        b = VLLMBackend(name="t", model_id="m")
+        b._client = _FakeStreamClient(_FakeStreamResponse(500, []))
+        chunks = _collect(b.generate_stream("hi"))
+        assert chunks == []
+
+    def test_stream_bad_json_skipped(self):
+        b = VLLMBackend(name="t", model_id="m")
+        lines = ['data: {invalid json', 'data: {"choices": [{"text": "ok"}]}']
+        b._client = _FakeStreamClient(_FakeStreamResponse(200, lines))
+        chunks = _collect(b.generate_stream("hi"))
+        assert chunks == ["ok"]
+
+
+class TestVLLMChat:
+    def test_chat_success(self):
+        b = VLLMBackend(name="t", model_id="m")
+        resp = _FakeResponse(200, {
+            "choices": [{"message": {"content": "chat reply"}}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+        })
+        b._client = _FakeClient(resp)
+        result = _run(b.generate_chat([{"role": "user", "content": "hi"}]))
+        assert result.text == "chat reply"
+        assert result.tokens_in == 3
+
+
+class TestLlamaCppStream:
+    def test_stream_yields_content(self):
+        b = LlamaCppBackend(name="t", model_id="m")
+        lines = [
+            '{"content": "tok1"}',
+            '{"content": "tok2"}',
+            '{"stop": true}',
+        ]
+        b._client = _FakeStreamClient(_FakeStreamResponse(200, lines))
+        chunks = _collect(b.generate_stream("hi"))
+        assert chunks == ["tok1", "tok2"]
+
+
+class TestOllamaStream:
+    def test_stream_yields_response(self):
+        b = OllamaBackend(name="t", model_id="m")
+        lines = [
+            '{"response": "chunk1"}',
+            '{"response": "chunk2"}',
+            '{"done": true}',
+        ]
+        b._client = _FakeStreamClient(_FakeStreamResponse(200, lines))
+        chunks = _collect(b.generate_stream("hi"))
+        assert chunks == ["chunk1", "chunk2"]

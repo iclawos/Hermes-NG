@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+import yaml
+
 from zilli.envs.planner_budget import PlannerBudget
 from zilli.security.isolation import AccessLevel, IsolationPolicy
 
@@ -135,6 +137,59 @@ class TenantManager:
 
     def __len__(self) -> int:
         return len(self._contexts)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path,
+                  base_dir: str | Path = "./tenant_data") -> "TenantManager":
+        """Load tenant definitions from a YAML file.
+
+        Format:
+            base_dir: ./tenant_data          # optional
+            tenants:
+              acme:
+                monthly_budget_usd: 1000
+                planner_ratio_limit: 0.10
+                industry: medical
+                policy:
+                  access_level: restricted
+                  allowed_roles: [executor]
+        """
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"Tenant config not found: {path}")
+        with open(p, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        mgr = cls(base_dir=data.get("base_dir", base_dir))
+        for tenant_id, tenant_data in (data.get("tenants") or {}).items():
+            cfg = TenantConfig.from_dict(tenant_id, tenant_data or {})
+            mgr.register(cfg)
+        return mgr
+
+    def save_yaml(self, path: str | Path) -> None:
+        """Persist current tenant registry to YAML."""
+        data: dict[str, Any] = {"base_dir": str(self._base_dir), "tenants": {}}
+        for ctx in self._contexts.values():
+            c = ctx.config
+            data["tenants"][c.tenant_id] = {
+                "monthly_budget_usd": c.monthly_budget_usd,
+                "planner_ratio_limit": c.planner_ratio_limit,
+                "max_sota_ratio": c.max_sota_ratio,
+                "industry": c.industry,
+                "data_retention_days": c.data_retention_days,
+                "policy": {
+                    "access_level": c.policy.access_level.value,
+                    "allowed_roles": c.policy.allowed_roles,
+                    "max_input_length": c.policy.max_input_length,
+                    "require_sanitization": c.policy.require_sanitization,
+                    "audit_required": c.policy.audit_required,
+                    "retention_days": c.policy.retention_days,
+                },
+            }
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
 
 __all__ = [

@@ -128,3 +128,46 @@ class TestTenantManager:
         b = mgr.register(TenantConfig(tenant_id="b"))
         assert a.data_dir != b.data_dir
         assert a.storage_path("feedback.jsonl") != b.storage_path("feedback.jsonl")
+
+
+class TestTenantPersistence:
+    def test_save_and_load_roundtrip(self, tmp_path):
+        mgr = TenantManager(base_dir=tmp_path / "data")
+        mgr.register(TenantConfig.from_dict("acme", {
+            "monthly_budget_usd": 1000.0,
+            "planner_ratio_limit": 0.10,
+            "industry": "medical",
+            "policy": {"access_level": "restricted", "allowed_roles": ["executor"]},
+        }))
+        cfg_file = tmp_path / "tenants.yaml"
+        mgr.save_yaml(cfg_file)
+
+        mgr2 = TenantManager.from_yaml(cfg_file, base_dir=tmp_path / "data2")
+        ctx = mgr2.get("acme")
+        assert ctx.config.monthly_budget_usd == 1000.0
+        assert ctx.config.planner_ratio_limit == 0.10
+        assert ctx.config.industry == "medical"
+        assert ctx.config.policy.access_level == AccessLevel.RESTRICTED
+        assert ctx.config.policy.allowed_roles == ["executor"]
+
+    def test_from_yaml_missing_file(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            TenantManager.from_yaml(tmp_path / "ghost.yaml")
+
+    def test_from_yaml_empty_tenants(self, tmp_path):
+        cfg = tmp_path / "t.yaml"
+        cfg.write_text("base_dir: ./data\ntenants: {}\n")
+        mgr = TenantManager.from_yaml(cfg)
+        assert len(mgr) == 0
+
+    def test_from_yaml_multiple_tenants(self, tmp_path):
+        cfg = tmp_path / "t.yaml"
+        cfg.write_text(
+            "tenants:\n"
+            "  a:\n    monthly_budget_usd: 100\n"
+            "  b:\n    monthly_budget_usd: 200\n"
+        )
+        mgr = TenantManager.from_yaml(cfg, base_dir=tmp_path)
+        assert len(mgr) == 2
+        assert mgr.get("a").config.monthly_budget_usd == 100
+        assert mgr.get("b").config.monthly_budget_usd == 200
