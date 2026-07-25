@@ -2,7 +2,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from zilli.audit.compliance import ComplianceFramework, ComplianceReporter, ComplianceReport
+from zilli.audit.compliance import ComplianceFramework, ComplianceReport, ComplianceReporter
 
 
 def _write_log(audit_dir: Path, events: list[dict], date: str = "2026-07-26"):

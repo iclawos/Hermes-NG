@@ -1,9 +1,8 @@
 import asyncio
-import json
 
+from zilli.models.llamacpp import LlamaCppBackend
 from zilli.models.ollama import OllamaBackend
 from zilli.models.vllm import VLLMBackend
-from zilli.models.llamacpp import LlamaCppBackend
 
 
 class _FakeResponse:
