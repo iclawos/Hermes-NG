@@ -14,22 +14,29 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 |------|------|------|
 | 多模型路由（Plan→Execute→Review） | ✅ 生产就绪 | 三阶段混合路由 + 行业合规路由 |
 | GPS-MOM 预测路由 | ✅ 生产就绪 | PPM + 三档策略 + 模型画像 + 反馈闭环 |
-| RL 训练（CISPO/GRPO） | ✅ 生产就绪 | 策略优化 + 优势估计 + 批量训练 |
-| 技能自进化 | ✅ 生产就绪 | 4 策略 + 多样性控制 + MOM 反馈闭环 |
+| 模型化 PPM 分类器 | ✅ 生产就绪 | RegexClassifier 零依赖 + SklearnONNXClassifier（`ppm` extra） |
+| 贝叶斯元评估 | ✅ v0.5.0 新增 | 高斯共轭先验更新，替代 bias/variance 简单统计 |
+| RL 训练（CISPO/GRPO） | ✅ 生产就绪 | 策略优化 + 优势估计 + 批量训练 + 断点续训 |
+| 技能自进化 | ✅ 生产就绪 | 4 策略 + 多样性控制 + MOM 反馈闭环 + 异步并发 |
 | Loop 循环引擎 | ✅ 生产就绪 | 重试 → 验证 → 修正 → 升级 |
 | 自适应 Self-Harness | ✅ 生产就绪 | 弱点挖掘 → 有界提案 → 分体验证 |
+| 未知项发现（Fable 方法） | ✅ v0.5.0 新增 | 盲点扫描 → 面试问题 → 实现笔记 → 测验 |
 | 知识蒸馏 | ✅ 生产就绪 | BC + KL + RL + Embedding 正则化 |
 | Champion-Challenger Arena | ✅ 生产就绪 | 统计显著性检验的模型擂台 |
-| 预算/成本控制 | ✅ 生产就绪 | DynamicSOTA + 频率控制器 + 月度预算 |
+| 端到端进化训练管线 | ✅ 生产就绪 | EvolveToTrainPipeline：Evolve → Train → Deploy → Monitor |
+| 预算/成本控制 | ✅ 生产就绪 | DynamicSOTA + 频率控制器 + 月度预算 + SOTA 硬约束（max_sota_ratio） |
 | 隐私合规 | ✅ 生产就绪 | PII 检测、脱敏、审计日志、数据隔离 |
-| Streamlit 管理台 | ✅ 基础版 | 审计浏览、成本监控、系统状态 |
+| 合规报告导出 CLI | ✅ v0.5.0 新增 | `zilli audit export --framework gdpr|hipaa|soc2|...` |
+| Streamlit 管理台 | ✅ 生产就绪 | 登录鉴权（admin/viewer 角色）、审计浏览、成本监控、PPM Stats、自动刷新 |
 | API 服务器 | ✅ 生产就绪 | FastAPI，OpenAI 兼容接口 |
 | Celery 分布式工作流 | ✅ 生产就绪 | DAG 持久化执行、任务重试、结果回调 |
 | ChromaDB 向量存储 | ✅ 生产就绪 | 语义检索、元数据过滤、集合管理 |
 | 行业工作流 | ✅ 生产就绪 | 法律/医疗/金融/教育合规路由 |
 | SWE-bench 修复 | ✅ 生产就绪 | Bug 复现 → 探索 → 诊断 → 修复 → 验证 |
+| DAG 可视化 | ✅ v0.5.0 新增 | `TaskDAG.to_mermaid()` 流程图导出 |
+| CI/CD | ✅ v0.5.0 新增 | GitHub Actions：lint + pyright typecheck + 多版本测试 |
 | Rust 辅助库 | 📋 已决策 | 项目内 Rust helper crate（尚未实现） |
-| CI/CD | 📋 待接入 | GitHub Actions 自动执行 706 测试 |
+| 多租户支持 | 📋 规划中 | 租户隔离的数据 + 配置 + 路由 |
 
 ## 2. 目标用户
 
@@ -139,17 +146,46 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 - **机制**: 构建评分 Prompt → 调用任意 async llm_generate → 正则解析 `Rating: X.XX` → 失败时回退到 heuristic
 - **验收标准**: 正确解析 `Rating: 0.85`；异常情况下回退到 auto_score；stats 追踪调用/回退计数
 
+### 3.6 v0.5.0 新增能力
+
+#### F-18 贝叶斯元评估
+- **描述**: 用高斯共轭先验更新替代简单 bias/variance 统计，小样本下稳健估计真实误差分布
+- **机制**: prior ~ N(μ₀, σ₀²) + likelihood ~ N(x̄, s²/n) → posterior；输出 posterior_mean / posterior_std
+- **验收标准**: 可靠性与校准误差联合判定；8 项测试通过
+
+#### F-19 未知项发现（Fable 方法）
+- **描述**: Anthropic "Finding Your Unknowns" 方法论的工程化实现
+- **机制**: `UnknownsDiscovery` — 盲点扫描（LLM 驱动）→ 面试问题生成 → 实现笔记（偏差追踪）→ 测验生成；CLI `zilli unknowns {blind-spot|interview|summary|resolve}`
+- **验收标准**: 未知项 JSON 持久化；四象限分类（known/unknown × knowns/unknowns）
+
+#### F-20 SOTA 硬约束
+- **描述**: SOTA 模型调用比例的强制性上限
+- **机制**: `DynamicSOTAScheduler(max_sota_ratio=0.05)` — 比例超限时 `should_call_sota()` 直接拒绝
+- **验收标准**: 超限场景测试通过；软约束（预算/配额）继续生效
+
+#### F-21 合规报告导出 CLI
+- **描述**: 合规报告一键导出为 JSON
+- **机制**: `zilli audit export --framework <gdpr|hipaa|soc2|pci_dss|ferpa|ccpa> --tenant <id> --start <date> --end <date> --output <path>`
+- **验收标准**: 报告含 findings 与 passed 判定
+
+#### F-22 DAG 可视化
+- **描述**: 任务 DAG 导出为 Mermaid 流程图
+- **机制**: `TaskDAG.to_mermaid()` — 节点状态着色（completed/failed/running/skipped）
+- **验收标准**: 输出合法 Mermaid 语法
+
 ## 4. 非功能需求
 
-| 需求 | 目标 | 衡量方式 |
-|------|------|----------|
-| 测试覆盖 | > 85% | pytest 覆盖率报告 |
-| 路由延迟 | PPM 预测 < 10ms | latency_ms 统计 |
-| 缓存命中率 | > 60% | PPM cache hit_rate |
-| 进化收敛 | 连续 3 轮无新 PR | 进化引擎 self-verification |
-| 内存安全 | 无安全隐患 | ruff + pyright 静态检查 |
-| 模型选择 | 成本优化 > 30% | StrategySelector 预算利用率 |
-| 反馈闭环 | 100 条触发批量持久化 | FeedbackCollector batch_size |
+| 需求 | 目标 | 当前状态 | 衡量方式 |
+|------|------|----------|----------|
+| 测试覆盖 | > 85% | 73%（770 tests / 0 warnings） | pytest 覆盖率报告 |
+| 静态检查 | 0 errors | ✅ ruff 0 / pyright 0 | CI 强制门禁 |
+| 路由延迟 | PPM 预测 < 10ms | ✅ | latency_ms 统计 |
+| 缓存命中率 | > 60% | ✅ OrderedDict LRU | PPM cache hit_rate |
+| 进化收敛 | 连续 3 轮无新 PR | ✅ | 进化引擎 self-verification |
+| 内存安全 | 无安全隐患 | ✅ | ruff + pyright 静态检查 |
+| 模型选择 | 成本优化 > 30% | ✅ | StrategySelector 预算利用率 |
+| 反馈闭环 | 100 条触发批量持久化 | ✅ record() 早触发 | FeedbackCollector batch_size |
+| 架构健康 | 0 循环导入 | ✅ ppm_types 拆分 | import graph 扫描 |
 
 ## 5. 依赖分析
 
@@ -211,9 +247,21 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 - MOMRouter 接入 Harness 模式
 - 706 测试通过，lint 干净
 
-### Phase 7（规划中 📋）
-- 接入 CI（GitHub Actions）
-- Model-based PPM（ONNX/Triton 替代 regex）
-- 端到端进化训练管线整合
-- Rust 辅助库实现
-- 多租户支持
+### Phase 7 v0.5.0（已完成 ✅）
+- 接入 CI（GitHub Actions：lint + pyright + 多版本测试）
+- Model-based PPM（SklearnONNXClassifier，`ppm` extra 可选依赖）
+- 端到端进化训练管线整合（EvolveToTrainPipeline + 断点续训）
+- 贝叶斯 MetaEvaluator（高斯共轭先验）
+- 未知项发现模块（Fable 方法）
+- SOTA 硬约束（max_sota_ratio）
+- 合规报告导出 CLI
+- DAG Mermaid 可视化
+- 异步死锁修复、反馈批量早触发、ppm 循环导入拆分
+- 770 测试通过，ruff 0 errors，pyright 0 errors
+
+### Phase 8（规划中 📋）
+- Rust 辅助库实现（zilli-rs 热路径）
+- 多租户支持（租户隔离的数据 + 配置 + 路由）
+- PPM training 集成到完整生产反馈闭环
+- Harness 模式在真实技能库上运行验证
+- 测试覆盖率 73% → 85%+
