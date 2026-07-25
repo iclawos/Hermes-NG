@@ -52,7 +52,6 @@ class TestRouterFullRoute:
         assert result.executor_result == "stage-output"
         assert result.reviewer_result == "stage-output"
         assert result.final_text == "stage-output"
-        roles = [r for r, _ in registry.calls]
         assert len(registry.calls) >= 3
 
     def test_full_route_via_classification(self):
