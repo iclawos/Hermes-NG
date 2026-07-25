@@ -272,6 +272,14 @@ class EvolveToTrainPipeline:
         meta_result = self._meta_evaluator.evaluate()
         drift = self._meta_evaluator.detect_drift()
 
+        if meta_result.sample_count < 10:
+            return CycleRecord(
+                stage=EvolveTrainStage.MONITOR,
+                success=True,
+                message=f"Insufficient data (n={meta_result.sample_count}) — skipping degradation check",
+                metrics={"sample_count": meta_result.sample_count},
+            )
+
         is_healthy = meta_result.reliable and not drift
         return CycleRecord(
             stage=EvolveTrainStage.MONITOR,
