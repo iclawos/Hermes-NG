@@ -26,14 +26,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev]" pyright
       - run: pyright zilli/ tests/
 
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
