@@ -1,6 +1,5 @@
 import asyncio
 import json
-from pathlib import Path
 
 from zilli.data import TrajectoryStore
 from zilli.learner.continuous_learner import ContinuousLearner
