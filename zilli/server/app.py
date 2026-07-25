@@ -154,12 +154,14 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
         if state.router and hasattr(state.router, "cache") and state.router.cache:
             state.router.cache.clear()
 
+    docs_enabled = os.environ.get("ZILLI_API_DOCS", "true").lower() in ("1", "true", "yes")
     app = FastAPI(
         title="Zilli API",
         version=version,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
 
     cors_origins_str = os.environ.get("ZILLI_CORS_ORIGINS", "http://127.0.0.1:8900,http://localhost:3000")
@@ -195,10 +197,10 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
     @app.middleware("http")
     async def _auth_middleware(request: Request, call_next):
         try:
-            if request.url.path not in (
-                "/healthz", "/v1/health", "/docs", "/redoc", "/openapi.json",
-                "/favicon.ico",
-            ):
+            public_paths = {"/healthz", "/v1/health", "/favicon.ico"}
+            if docs_enabled:
+                public_paths |= {"/docs", "/redoc", "/openapi.json"}
+            if request.url.path not in public_paths:
                 state.verify_api_key(request)
                 client_ip = request.client.host if request.client else "unknown"
                 state.check_rate_limit(client_ip)
