@@ -286,13 +286,24 @@ MetaLoopRunner.run(input_data)
 - [x] DAG Mermaid 可视化
 - [x] 版本号更新 0.4.0 → 0.5.0
 
-### Release v0.6.0 候选
+### Release v0.6.0 候选（Phase 8，进行中）
 
-- [ ] PPM training 集成到完整反馈闭环
-- [ ] LLM-as-Judge 评分在生产场景验证
-- [ ] Harness 模式在真实技能库上运行验证
-- [ ] 多租户支持
-- [ ] Rust crate zilli-rs 实现
+| 任务 | 文件 | 预估工时 | 状态 |
+|------|------|----------|------|
+| 覆盖率 74% → 85%+：vector_store/compliance/models backends/celery_executor 测试 | `tests/` | 8h | 🔵 进行中 |
+| 多租户支持（租户隔离的数据 + 配置 + 路由） | `routing/`, `configs/`, `security/isolation.py` | 16h | 📋 |
+| PPM training 集成到完整生产反馈闭环 | `routing/ppm.py`, `routing/feedback.py` | 4h | 📋 |
+| Harness 模式在真实技能库上运行验证 | `evolution/`, `examples/` | 4h | 📋 |
+| Rust crate `zilli-rs` 热路径（PPM 预测 + 指纹计算） | `zilli-rs/` | 24h | 📋 |
+| `evolution/cli.py` 覆盖率 22% → 70%+ | `tests/test_evolution_cli*.py` | 3h | 📋 |
+| `run_training.py` 覆盖率 35% → 70%+ | `tests/test_checkpoint_resume.py` | 3h | 📋 |
+| `continuous_learner.py` 覆盖率 35% → 70%+ | `tests/` | 2h | 📋 |
+| `tasks/__init__.py` 模板评估覆盖率 45% → 75%+ | `tests/` | 2h | 📋 |
+
+不做的事（明确排除）：
+- ❌ Streamlit dashboard_app.py 单元测试（Streamlit 运行时依赖真实浏览器，用 e2e 验证替代）
+- ❌ 完全重建（当前架构健康：0 循环导入、0 静态错误，重建风险大于收益）
+- ❌ vLLM/Ollama/llamacpp backends 的真实 HTTP 集成测试（需要真实模型服务，用 mock 覆盖协议层即可）
 
 ### Release v1.0.0 标准
 
