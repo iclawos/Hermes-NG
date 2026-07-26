@@ -9,10 +9,19 @@ def _run(coro):
 
 class TestSandboxHostMode:
     def test_ensure_container_no_docker(self, tmp_path):
+        import shutil
+        from zilli.swe import sandbox as sb_mod
+
         sb = Sandbox(SandboxConfig())
         cid = _run(sb.ensure_container(tmp_path))
-        assert cid == ""
-        assert sb._container_id is None
+
+        docker_reachable = sb_mod.HAS_DOCKER and shutil.which("docker") is not None
+        if docker_reachable:
+            assert cid, "docker available: expect real container id"
+            _run(sb.cleanup())
+        else:
+            assert cid == ""
+            assert sb._container_id is None
 
     def test_run_command_success(self):
         sb = Sandbox()
