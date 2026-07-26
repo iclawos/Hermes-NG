@@ -45,12 +45,4 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
       - run: pip install -e ".[ci]"
-      - run: python -m pytest tests/ -v --tb=short --no-header --junitxml=junit.xml || true
-      - name: Publish test results
-        uses: dorny/test-reporter@v2
-        if: always()
-        with:
-          name: pytest-results
-          path: junit.xml
-          reporter: java-junit
-          fail-on-error: true
+      - run: python -m pytest tests/ -v --tb=short --no-header
