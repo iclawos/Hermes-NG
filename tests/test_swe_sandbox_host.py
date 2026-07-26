@@ -10,6 +10,7 @@ def _run(coro):
 class TestSandboxHostMode:
     def test_ensure_container_no_docker(self, tmp_path):
         import shutil
+
         from zilli.swe import sandbox as sb_mod
 
         sb = Sandbox(SandboxConfig())
