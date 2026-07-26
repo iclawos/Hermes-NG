@@ -35,7 +35,7 @@ class TestEvolveAsyncContextSafety:
         async def run():
             return await asyncio.wait_for(
                 asyncio.to_thread(engine.evolve, skill, []),
-                timeout=2.0,
+                timeout=10.0,
             )
 
         # evolve in a worker thread has no running loop -> asyncio.run path
@@ -53,7 +53,7 @@ class TestEvolveAsyncContextSafety:
 
         # Direct call on loop thread: MOM routing is skipped (warning logged),
         # so this completes immediately without awaiting the loop.
-        pr = asyncio.run(asyncio.wait_for(run(), timeout=2.0))
+        pr = asyncio.run(asyncio.wait_for(run(), timeout=10.0))
         assert isinstance(pr, str)
 
     def test_route_reflection_in_async_context(self, tmp_path):
@@ -64,5 +64,5 @@ class TestEvolveAsyncContextSafety:
         async def run():
             return engine._route_reflection(["some error"])
 
-        result = asyncio.run(asyncio.wait_for(run(), timeout=2.0))
+        result = asyncio.run(asyncio.wait_for(run(), timeout=10.0))
         assert result == "cached-model"

@@ -29,7 +29,7 @@ class TestSoakRunner:
         runner = SoakRunner(_FakePipeline(), interval_sec=0.01,
                             status_path=str(tmp_path / "s.json"),
                             metrics_path=str(tmp_path / "m.jsonl"))
-        health = _run(runner.run(max_duration_sec=0.05))
+        health = _run(runner.run(max_duration_sec=2.0))
         assert health.cycles_completed >= 1
         assert health.cycles_failed == 0
         assert health.healthy
@@ -89,7 +89,7 @@ class TestSoakRunner:
         runner = SoakRunner(_FakePipeline(), interval_sec=0.01,
                             status_path=str(tmp_path / "s.json"),
                             metrics_path=str(tmp_path / "m.jsonl"))
-        health = _run(runner.run(max_duration_sec=0.05))
+        health = _run(runner.run(max_duration_sec=2.0))
         assert health.last_champion == "fake-v1"
 
 

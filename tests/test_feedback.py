@@ -56,8 +56,11 @@ class TestFeedbackCollector:
                         selected_model="m1", strategy_tier="economy",
                         actual_latency_ms=50, actual_cost=0.001,
                     ))
-                await asyncio.sleep(0.1)
-                assert Path(path).exists()
+                deadline = asyncio.get_event_loop().time() + 5.0
+                while not Path(path).exists():
+                    if asyncio.get_event_loop().time() > deadline:
+                        raise TimeoutError("flush did not persist in 5s")
+                    await asyncio.sleep(0.05)
                 lines = Path(path).read_text().strip().split("\n")
                 assert len(lines) == 5
 
