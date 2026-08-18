@@ -265,7 +265,7 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 
 | 需求 | 目标 | 当前状态 | 衡量方式 |
 | - | - | - | - |
-| 测试覆盖 | \> 85% | ✅ 85.1%（1028 tests / 0 warnings） | pytest 覆盖率报告 |
+| 测试覆盖 | \> 85% | ✅ 85.0%（1048 tests / 0 warnings） | pytest 覆盖率报告 |
 | 静态检查 | 0 errors | ✅ ruff 0 / pyright 0 | CI 强制门禁 |
 | 路由延迟 | PPM 预测 \< 10ms | ✅ | latency\_ms 统计 |
 | 缓存命中率 | \> 60% | ✅ OrderedDict LRU | PPM cache hit\_rate |
@@ -403,7 +403,7 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 
 - Dashboard 无头测试（streamlit.testing.v1）
 
-- 测试覆盖率 → 85.1%（972 → 1017 → 1028 tests）
+- 测试覆盖率 → 85.0%（972 → 1017 → 1028 → 1048 tests）
 
 ### Phase 9 v1.0.0（已完成 ✅）
 
@@ -415,5 +415,5 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 
 - 参考文档 × 4 + 安全审计报告
 
-- 1028 tests / ruff 0 / pyright 0 / 覆盖率 85.1%
+- 1048 tests / ruff 0 / pyright 0 / 覆盖率 85.0%
 

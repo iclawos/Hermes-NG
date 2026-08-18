@@ -7,8 +7,8 @@
 | 项目名 | Zilli（原 Hermes-NG） |
 | 版本 | 1.0.0 |
 | 语言 | Python 3.12+（主） + Rust（辅助 crate `zilli-rs`，PyO3 热路径已接） |
-| 测试 | 1028 tests, 0 warnings |
-| 覆盖率 | 85.1% |
+| 测试 | 1048 tests, 0 warnings |
+| 覆盖率 | 85.0% |
 | 代码风格 | ruff (all rules), pyright (strict) |
 | 入口 | `zilli` (CLI), `zilli-evolve` (进化 CLI) |
 | 包管理 | pip / uv |
@@ -56,7 +56,7 @@
 
 ### 2.2 测试 (`tests/`)
 
-> 实况：78 个测试文件、1028 tests 全部通过。以下为代表性文件（完整清单以 `pytest --collect-only` 为准）。
+> 实况：78 个测试文件、1048 tests 全部通过。以下为代表性文件（完整清单以 `pytest --collect-only` 为准）。
 
 | 测试文件 | 所属模块 | 测试数 | 状态 |
 |----------|----------|--------|------|
@@ -82,7 +82,7 @@
 | `test_trajectory_cleaner.py` | data | 13 | ✅ |
 | `test_training_data.py` | training | 7 | ✅ |
 | **其余 41 文件** | 全模块 | 1 个测试文件仅 1-15 个测试 | ✅ |
-| **合计** | **78 文件** | **1028 tests** | **✅ 全部通过** |
+| **合计** | **78 文件** | **1048 tests** | **✅ 全部通过** |
 
 ## 3. 架构图
 
@@ -252,6 +252,7 @@ MetaLoopRunner.run(input_data)
 
 | 任务 | 文件 | 预估工时 |
 |------|------|----------|
+| T-10 多租户访问控制（密钥-租户绑定，替代客户端自报；2026-08-18 kimi k3 H5） | `tenancy.py`, `server/app.py` | 8h |
 | Rust crate `zilli-rs` 演化核心、loop 引擎实现 | `zilli-rs/` | 24h |
 | 多租户生产级完善（租户隔离的数据 + 配置 + 路由） | `routing/`, `configs/` | 16h |
 | FeedbackEvaluator LLM-as-Judge 缓存 | `routing/feedback.py` | 2h |
@@ -289,7 +290,7 @@ MetaLoopRunner.run(input_data)
 | P0 修复：dashboard st.secrets 无文件时崩溃 | `dashboard_app.py` | 0.5h | ✅ |
 
 遗留（诚实记录）：
-- ~~覆盖率 83.6% vs 目标 85%~~ ✅ 已达 85.1%（1028 tests）
+- ~~覆盖率 83.6% vs 目标 85%~~ ✅ 已达 85.0%（1048 tests）
 - ~~Rust hotpath 尚未接 PyO3 绑定~~ ✅ `zilli-rs/src/bindings/` 已实现（optional `python-bindings` feature，`cargo check` 通过）。安装 wheel：`pip install maturin && cd zilli-rs && maturin develop --features python-bindings`（需要 pip 安装权限，未执行）
 - ~~多租户当前为单进程内存注册表~~ ✅ `TenantManager.from_yaml/save_yaml` 持久化已实现
 
@@ -297,7 +298,7 @@ MetaLoopRunner.run(input_data)
 
 | 里程碑 | 状态 |
 |--------|------|
-| 1028 tests / ruff 0 / pyright 0 / 覆盖率 85.1% | ✅ |
+| 1048 tests / ruff 0 / pyright 0 / 覆盖率 85.0% | ✅ |
 | 模型化 PPM（sklearn ONNX，acc 1.0 / RMSE 0.044）替代 regex | ✅ |
 | `zilli soak` 持续运行器（健康监控 + 崩溃恢复 + 指标落盘） | ✅ |
 | 多租户 `TenantManager` YAML 持久化 + `/v1/tenants` 端点 | ✅ |

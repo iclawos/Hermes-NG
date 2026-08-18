@@ -44,6 +44,22 @@ Every route/chat request writes to `audit_logs/audit_YYYY-MM-DD.jsonl`:
 - `route_decision`: tenant, route_type, reason
 - `model_call`: tenant, tokens, duration, success
 
+## Streamlit Dashboard
+
+```
+streamlit run zilli/dashboard_app.py
+```
+
+**Credentials are mandatory (since 2026-08-18)**: the dashboard refuses to start and prints configuration instructions when neither is set. Previously it defaulted to admin/admin.
+
+| Var | Description |
+|-----|-------------|
+| `ZILLI_DASHBOARD_PASSWORD` | Single-user mode: password for `admin` |
+| `ZILLI_DASHBOARD_USERS` | Multi-user JSON: `{"user": {"password_hash": "<sha256 hex>", "role": "admin\|viewer"}}` |
+| `ZILLI_BUDGET_FILE` | Budget file shown on the cost page (default `~/.zilli_budget.json`) |
+
+Passwords are stored as SHA-256 hex and compared with `hmac.compare_digest`. Streamlit `secrets.toml` (`[dashboard.users]`) takes precedence over env vars.
+
 ## Tenancy
 
 ```

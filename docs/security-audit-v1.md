@@ -42,6 +42,17 @@
 - `tests/test_audit.py` 8 项（审计 logger）
 - `tests/test_tenancy.py` 21 项（租户隔离 + 持久化）
 
+---
+
+## 附录：2026-08-18 二次审查（kimi k3）修复
+
+| 项 | 原缺陷 | 处置 |
+|----|--------|------|
+| API 鉴权 fail-open | 未配置 `ZILLI_API_KEYS` 时 `verify_api_key` 返回 None，全部接口公开 | 改 **fail-closed**：非本地客户端 401；`127.0.0.1`/`::1` 放行。回归测试 `test_fail_closed_no_keys_*` + `TestLocalAuthBypass` |
+| Dashboard 默认弱口令 | 默认 admin/admin、无盐 SHA-256 + `==` 比较 | 未配置 `ZILLI_DASHBOARD_PASSWORD`/`ZILLI_DASHBOARD_USERS` 时**拒绝启动**；比较改 `hmac.compare_digest`。回归测试 `TestDashboardNoCredentials` |
+| 测试删除真实预算文件 | 测试 teardown 删除 `~/.zilli_budget.json` | 新增 `ZILLI_BUDGET_FILE` 环境变量，测试全部隔离临时目录 |
+| 多租户访问控制 | 租户身份由客户端自报（`X-Tenant-ID`），无密钥-租户绑定 | **登记 T-10 技术债，本期不处理**。注：本报告"多租户隔离 ✅"指 tenant_id 校验与目录命名空间隔离，不含身份认证 |
+
 ## 后续建议（非阻塞）
 
 - 审计日志加密存储（合规高级场景）
