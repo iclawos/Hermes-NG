@@ -106,3 +106,13 @@ class TestTaskRunner:
         r = asyncio.run(runner.run(steps))
         assert all(x.success for x in r)
         assert list(results.keys()) == ["parse", "validate", "generate"]
+
+    def test_coroutine_step(self):
+        runner = TaskRunner()
+
+        async def awork():
+            return "async-ok"
+
+        results = asyncio.run(runner.run([TaskStep(name="c", fn=awork)]))
+        assert results[0].success
+        assert results[0].result == "async-ok"

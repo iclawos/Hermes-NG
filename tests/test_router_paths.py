@@ -165,3 +165,47 @@ class TestRouterReview:
         router = LocalHybridRouter(registry, RouteClassifier())
         out = _run(router.review("plan", "draft", "req"))
         assert out == "draft"
+
+    def test_review_error_returns_draft(self):
+        registry = _MockRegistry(text="x", error="reviewer down")
+        router = LocalHybridRouter(registry, RouteClassifier())
+        out = _run(router.review("plan", "draft", "req"))
+        assert out == "draft"
+
+    def test_execute_batch_returns_all_results(self):
+        registry = _MockRegistry(text="batch-out")
+        router = LocalHybridRouter(registry, RouteClassifier())
+        out = _run(router.execute_batch("plan", "req", ["s1", "s2", "s3"]))
+        assert out == ["batch-out"] * 3
+
+    def test_execute_batch_error_per_subtask(self):
+        registry = _MockRegistry(text="x", error="executor down")
+        router = LocalHybridRouter(registry, RouteClassifier())
+        out = _run(router.execute_batch("plan", "req", ["s1"]))
+        assert out == ["[Error: executor down]"]
+
+    def test_execute_error_raises(self):
+        registry = _MockRegistry(text="x", error="executor down")
+        router = LocalHybridRouter(registry, RouteClassifier())
+        try:
+            _run(router.execute("plan", "req"))
+            raise AssertionError("should have raised")
+        except RuntimeError as e:
+            assert "executor down" in str(e)
+
+    def test_plan_error_raises(self):
+        registry = _MockRegistry(text="x", error="planner down")
+        router = LocalHybridRouter(registry, RouteClassifier())
+        try:
+            _run(router.plan("req"))
+            raise AssertionError("should have raised")
+        except RuntimeError as e:
+            assert "planner down" in str(e)
+
+    def test_review_empty_correction_returns_draft(self):
+        registry = _RoleAwareMockRegistry({
+            "planner": "plan", "executor": "exec", "reviewer": "NEEDS_CHANGES",
+        })
+        router = LocalHybridRouter(registry, RouteClassifier())
+        out = _run(router.review("plan", "draft", "req"))
+        assert out == "draft"

@@ -318,3 +318,45 @@ class TestLoopRunner:
         await runner.run("a")
         await runner.run("b")
         assert len(runner.memory.recent()) == 2
+
+    @pytest.mark.asyncio
+    async def test_run_forever_stops_after_consecutive_failures(self):
+        process = AsyncMock(return_value="result")
+        verifier = AsyncMock()
+        verifier.verify.return_value = VerificationResult(passed=False, evidence="boom")
+        trigger = AsyncMock()
+        trigger.wait.return_value = True
+
+        runner = LoopRunner(process, verifier, trigger, max_retries=0, name="t")
+        await runner.run_forever({"task_id": "t1"})
+        assert process.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_run_forever_success_then_trigger_stop(self):
+        process = AsyncMock(return_value="ok")
+        verifier = AsyncMock()
+        verifier.verify.return_value = VerificationResult(passed=True)
+        trigger = AsyncMock()
+        trigger.wait.side_effect = [True, False]
+
+        runner = LoopRunner(process, verifier, trigger, max_retries=3)
+        await runner.run_forever("input")
+        assert process.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_run_forever_mines_failures_with_miner(self):
+        miner = MagicMock()
+        miner.summary.return_value = {"clusters": ["c1"]}
+        process = AsyncMock(return_value="r")
+        verifier = AsyncMock()
+        verifier.verify.return_value = VerificationResult(passed=False, evidence="nope")
+        trigger = AsyncMock()
+        trigger.wait.return_value = True
+
+        runner = LoopRunner(process, verifier, trigger, max_retries=0,
+                            weakness_miner=miner)
+        await runner.run_forever({"task_id": "x"})
+        miner.ingest.assert_called_once()
+        traces = miner.ingest.call_args[0][0]
+        assert traces[0]["task_id"] == "x"
+        assert traces[0]["mechanism"] == "loop_runner"

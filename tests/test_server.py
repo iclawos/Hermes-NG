@@ -506,3 +506,14 @@ class TestAuditTrail:
         assert audit_files
         content = audit_files[0].read_text()
         assert "model_call" in content
+
+
+class TestLocalAuthBypass:
+    def test_localhost_allowed_without_keys(self):
+        from types import SimpleNamespace
+
+        from zilli.server.app import ZilliAppState
+        state = ZilliAppState()
+        state.api_keys = set()
+        req = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
+        assert state.verify_api_key(req) is None

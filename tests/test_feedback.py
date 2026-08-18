@@ -168,3 +168,44 @@ class TestFeedbackEvaluatorLLMScore:
         for i in range(5):
             asyncio.run(ev.llm_score(f"q{i}", f"a{i}", fake_llm))
         assert ev.stats()["llm_cache_size"] <= 2
+
+    def test_start_record_stop_single_loop_persists(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as tmp:
+                path = str(Path(tmp) / "fb.jsonl")
+                collector = FeedbackCollector(persist_path=path,
+                                              flush_interval_seconds=0.05)
+                await collector.start()
+                collector.record(FeedbackRecord(
+                    request_id="x1", ppm_difficulty=0.3, ppm_family="chat",
+                    selected_model="m1", strategy_tier="economy",
+                    actual_latency_ms=50, actual_cost=0.001,
+                ))
+                await asyncio.sleep(0.15)
+                await collector.stop()
+                assert collector._flush_task is None
+                assert "x1" in Path(path).read_text()
+
+        asyncio.run(run())
+
+    def test_persist_failure_does_not_crash(self):
+        async def run():
+            collector = FeedbackCollector(persist_path="/proc/impossible-dir/fb.jsonl")
+            collector.record(FeedbackRecord(
+                request_id="p1", ppm_difficulty=0.3, ppm_family="chat",
+                selected_model="m1", strategy_tier="economy",
+                actual_latency_ms=50, actual_cost=0.001,
+            ))
+            await collector.flush()  # persist fails silently
+
+        asyncio.run(run())
+
+    def test_llm_score_fallback_on_non_text_result(self):
+        ev = FeedbackEvaluator()
+
+        async def fake_llm(prompt):
+            return 42
+
+        score = asyncio.run(ev.llm_score("Q", "A decent answer here", fake_llm))
+        assert 0.0 <= score <= 1.0
+        assert ev._llm_fallback_count == 1
