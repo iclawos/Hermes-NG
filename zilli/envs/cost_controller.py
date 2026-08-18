@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("zilli.cost_controller")
 
-_BUDGET_FILE = Path.home() / ".zilli_budget.json"
+_BUDGET_FILE = Path(os.environ.get("ZILLI_BUDGET_FILE", str(Path.home() / ".zilli_budget.json")))
 _DEFAULT_BUDGET = 500.0
 
 

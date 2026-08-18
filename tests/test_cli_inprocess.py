@@ -5,6 +5,12 @@ import pytest
 from zilli.cli import main
 
 
+@pytest.fixture(autouse=True)
+def _isolate_budget(tmp_path, monkeypatch):
+    """Never touch the real ~/.zilli_budget.json during CLI tests."""
+    monkeypatch.setenv("ZILLI_BUDGET_FILE", str(tmp_path / "budget.json"))
+
+
 def _argv(monkeypatch, *args):
     monkeypatch.setattr(sys, "argv", ["zilli"] + list(args))
 

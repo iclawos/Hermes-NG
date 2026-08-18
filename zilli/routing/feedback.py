@@ -52,13 +52,21 @@ class FeedbackCollector:
         self._buffer: list[FeedbackRecord] = []
         self._path = Path(persist_path) if persist_path else None
         self._running = False
+        self._flush_task: Optional[asyncio.Task] = None
 
     async def start(self) -> None:
         self._running = True
-        asyncio.create_task(self._flush_loop())
+        self._flush_task = asyncio.create_task(self._flush_loop())
 
     async def stop(self) -> None:
         self._running = False
+        if self._flush_task:
+            self._flush_task.cancel()
+            try:
+                await self._flush_task
+            except asyncio.CancelledError:
+                pass
+            self._flush_task = None
         await self.flush()
 
     def record(self, record: FeedbackRecord) -> None:

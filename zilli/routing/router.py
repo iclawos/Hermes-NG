@@ -196,8 +196,8 @@ class LocalHybridRouter:
         if "NEEDS_CHANGES" in text:
             keyword = "NEEDS_CHANGES"
             idx = text.index(keyword) + len(keyword)
-            corrected = text[idx:].strip().split("\n")[0][:200]
-            return corrected
+            corrected = text[idx:].strip()
+            return corrected if corrected else draft
         if "PASSED" in text:
             return draft
         return draft

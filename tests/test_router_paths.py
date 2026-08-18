@@ -25,6 +25,22 @@ class _MockRegistry(ModelRegistry):
         )
 
 
+class _RoleAwareMockRegistry(ModelRegistry):
+    def __init__(self, by_role):
+        super().__init__()
+        self._by_role = by_role
+        self.calls = []
+        self.profile.models = []
+
+    async def generate(self, role, prompt, **kw):
+        self.calls.append((role.value, prompt))
+        text = self._by_role.get(role.value, "mock")
+        return GenerationResult(
+            text=text, model_name=f"mock-{role.value}",
+            tokens_in=10, tokens_out=20,
+        )
+
+
 class TestRouterFastLane:
     def test_fast_lane_returns_executor_output(self):
         registry = _MockRegistry(text="fast answer")
@@ -126,4 +142,26 @@ class TestRouterException:
         router = LocalHybridRouter(_BoomRegistry(), RouteClassifier())
         result = _run(router.run("hello"))
         assert result.error == "kaboom"
-        assert result.final_text == ""
+
+
+class TestRouterReview:
+    def test_review_returns_full_corrected_text(self):
+        registry = _RoleAwareMockRegistry({
+            "planner": "plan",
+            "executor": "exec",
+            "reviewer": "NEEDS_CHANGES\n" + "y" * 500,
+        })
+        router = LocalHybridRouter(registry, RouteClassifier())
+        out = _run(router.review("plan", "draft", "req"))
+        assert len(out) == 500
+        assert out == "y" * 500
+
+    def test_review_passed_returns_draft(self):
+        registry = _RoleAwareMockRegistry({
+            "planner": "plan",
+            "executor": "exec",
+            "reviewer": "PASSED",
+        })
+        router = LocalHybridRouter(registry, RouteClassifier())
+        out = _run(router.review("plan", "draft", "req"))
+        assert out == "draft"

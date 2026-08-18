@@ -47,7 +47,9 @@ class TaskRunner:
                 results[r.name] = r
                 done.add(r.name)
 
-        return [results[s.name] for s in steps]
+        return [results.get(s.name, StepResult(
+            name=s.name, success=False, error="Step never ran (deadlock or dependency failure)",
+        )) for s in steps]
 
     async def _run_one(self, step: TaskStep) -> StepResult:
         start = time.monotonic()

@@ -126,7 +126,15 @@ class ZilliAppState:
 
     def verify_api_key(self, request: Request) -> str | None:
         if not self.api_keys:
-            return None
+            client_ip = request.client.host if request.client else "unknown"
+            if client_ip in ("127.0.0.1", "::1", "localhost"):
+                return None
+            logger.warning(
+                "Rejected request without API key from non-local client %s "
+                "(set ZILLI_API_KEYS to authenticate remote clients)",
+                client_ip,
+            )
+            raise HTTPException(status_code=401, detail="Missing or invalid API key")
         auth = request.headers.get("Authorization", "")
         api_key = request.headers.get("X-API-Key", "")
         if auth.startswith("Bearer "):

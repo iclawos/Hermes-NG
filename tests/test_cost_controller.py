@@ -1,7 +1,15 @@
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from zilli.envs.cost_controller import CostController
+
+
+@pytest.fixture(autouse=True)
+def _isolate_budget_file(tmp_path, monkeypatch):
+    """Isolate all budget state to a per-test tmp file — never touch ~/.zilli_budget.json."""
+    monkeypatch.setenv("ZILLI_BUDGET_FILE", str(tmp_path / "budget.json"))
 
 
 def _make_cc(monthly_budget=100.0):
@@ -18,12 +26,6 @@ def _cleanup(cc):
 
 
 class TestCostController:
-    def teardown_method(self):
-        # clean up default file if any test wrote to it
-        default = Path.home() / ".zilli_budget.json"
-        if default.exists():
-            default.unlink()
-
     def test_default_init(self):
         cc = _make_cc(100.0)
         assert cc.scheduler.remaining_budget == 100.0

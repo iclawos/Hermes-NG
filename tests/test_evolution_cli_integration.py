@@ -81,6 +81,7 @@ def test_cli_integration_diversity_rejection(tmp_path: Path):
     engine = SkillEvolutionEngine(diversity_controller=dc)
     pr = engine.evolve(str(skill_file), trajectory_data=[])
     assert "Diversity Rejected" in pr
+    assert "# Diversity rejected" in pr
 
 
 def test_harness_mode_with_mom_router(tmp_path: Path):

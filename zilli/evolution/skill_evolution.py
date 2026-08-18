@@ -376,6 +376,8 @@ class SkillEvolutionEngine:
             f" # Iterations: {optimized.get('iterations', 1)}",
             f" # Functions: {len(optimized.get('functions', []))}",
         ]
+        if strategy == "diversity_rejected":
+            diff_lines.insert(3, "# Diversity rejected")
         if optimized.get("improved_source"):
             diff_lines.append(f"+# Evolved source ({len(optimized['improved_source'].split(chr(10)))} lines)")
         if optimized.get("reflections"):

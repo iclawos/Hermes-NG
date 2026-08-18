@@ -1,13 +1,27 @@
+import os
 import subprocess
 import sys
 
+import pytest
+
 CLI = [sys.executable, "-m", "zilli.cli"]
+
+_run_cli_env = os.environ.copy()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_budget(tmp_path):
+    """Never touch the real ~/.zilli_budget.json during subprocess CLI tests."""
+    global _run_cli_env
+    _run_cli_env = dict(os.environ, ZILLI_BUDGET_FILE=str(tmp_path / "budget.json"))
+    yield _run_cli_env
 
 
 def _run_cli(*args, timeout=60):
     return subprocess.run(
         CLI + list(args),
         capture_output=True, text=True, timeout=timeout,
+        env=_run_cli_env,
     )
 
 

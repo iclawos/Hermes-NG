@@ -74,6 +74,17 @@ class TestTaskRunner:
         assert not results[0].success
         assert "always fails" in results[0].error
 
+    def test_deadlock_returns_failed_results(self):
+        runner = TaskRunner()
+        steps = [
+            TaskStep(name="a", fn=lambda: "a", depends_on=["b"]),
+            TaskStep(name="b", fn=lambda: "b", depends_on=["a"]),
+        ]
+        results = asyncio.run(runner.run(steps))
+        assert len(results) == 2
+        assert all(not r.success for r in results)
+        assert all("never ran" in r.error for r in results)
+
     def test_dag_dependency_shared_state(self):
         runner = TaskRunner()
         results: dict[str, str] = {}

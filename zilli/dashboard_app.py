@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import time
@@ -12,7 +13,7 @@ st.set_page_config(page_title="Zilli Dashboard", layout="wide")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 AUDIT_DIR = BASE_DIR / "audit_logs"
-COST_FILE = Path.home() / ".zilli_budget.json"
+COST_FILE = Path(os.environ.get("ZILLI_BUDGET_FILE", str(Path.home() / ".zilli_budget.json")))
 STATE_FILE = BASE_DIR / "state" / "STATE.md"
 
 
@@ -20,9 +21,16 @@ def _check_password() -> bool:
     if "authenticated" in st.session_state and st.session_state.authenticated:
         return True
 
-    st.markdown("## Zilli Dashboard Login")
-
     users = _load_users()
+    if not users:
+        st.error(
+            "Dashboard 未配置登录凭据，已拒绝启动。\n\n"
+            "请设置环境变量 `ZILLI_DASHBOARD_PASSWORD`（单用户 admin）或 "
+            "`ZILLI_DASHBOARD_USERS`（多用户 JSON）后重启。"
+        )
+        return False
+
+    st.markdown("## Zilli Dashboard Login")
 
     with st.form("login_form"):
         username = st.text_input("Username", placeholder="admin")
@@ -33,7 +41,7 @@ def _check_password() -> bool:
         if username in users:
             stored = users[username]
             pw_hash = hashlib.sha256(password.encode()).hexdigest()
-            if pw_hash == stored.get("password_hash", ""):
+            if hmac.compare_digest(pw_hash, stored.get("password_hash", "")):
                 st.session_state.authenticated = True
                 st.session_state.username = username
                 st.session_state.role = stored.get("role", "viewer")
@@ -53,12 +61,16 @@ def _load_users() -> dict:
     env_users_raw = os.environ.get("ZILLI_DASHBOARD_USERS", "")
     if env_users_raw:
         try:
-            return json.loads(env_users_raw)
+            users = json.loads(env_users_raw)
+            if users:
+                return users
         except json.JSONDecodeError:
             pass
 
-    default_pw = os.environ.get("ZILLI_DASHBOARD_PASSWORD", "admin")
-    pw_hash = hashlib.sha256(default_pw.encode()).hexdigest()
+    password = os.environ.get("ZILLI_DASHBOARD_PASSWORD", "")
+    if not password:
+        return {}
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
     return {
         "admin": {"password_hash": pw_hash, "role": "admin"},
     }

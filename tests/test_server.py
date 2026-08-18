@@ -39,9 +39,12 @@ class MockBackend:
 
 @pytest.fixture
 def client():
+    os.environ["ZILLI_API_KEYS"] = "test-key-123,test-key-456"
     app = create_app()
     with TestClient(app) as c:
+        c.headers.update({"Authorization": "Bearer test-key-123"})
         yield c
+    del os.environ["ZILLI_API_KEYS"]
 
 
 @pytest.fixture
@@ -51,6 +54,15 @@ def client_with_auth():
     with TestClient(app) as c:
         yield c
     del os.environ["ZILLI_API_KEYS"]
+
+
+@pytest.fixture
+def client_no_keys():
+    os.environ.pop("ZILLI_API_KEYS", None)
+    app = create_app()
+    with TestClient(app) as c:
+        yield c
+    os.environ.pop("ZILLI_API_KEYS", None)
 
 
 class TestHealth:
@@ -397,6 +409,14 @@ class TestAuth:
         resp = client_with_auth.get("/docs")
         assert resp.status_code == 200
 
+    def test_fail_closed_no_keys_rejects_protected(self, client_no_keys):
+        resp = client_no_keys.get("/v1/models/internal")
+        assert resp.status_code == 401
+
+    def test_fail_closed_no_keys_health_still_public(self, client_no_keys):
+        resp = client_no_keys.get("/v1/health")
+        assert resp.status_code == 200
+
 
 class TestSwagger:
     def test_docs_available(self, client):
@@ -466,6 +486,7 @@ class TestAuditTrail:
 
         from zilli.server.app import create_app
         with TestClient(create_app()) as c:
+            c.headers.update({"Authorization": "Bearer test-key-123"})
             c.post("/v1/route", json={"request": "hello world"})
         audit_files = list((tmp_path / "audit_logs").glob("audit_*.jsonl"))
         assert audit_files, "audit log should be written"
@@ -478,6 +499,7 @@ class TestAuditTrail:
 
         from zilli.server.app import create_app
         with TestClient(create_app()) as c:
+            c.headers.update({"Authorization": "Bearer test-key-123"})
             c.post("/v1/chat/completions",
                    json={"messages": [{"role": "user", "content": "hi"}]})
         audit_files = list((tmp_path / "audit_logs").glob("audit_*.jsonl"))
