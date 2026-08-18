@@ -101,3 +101,73 @@ class TestEvolveToTrainPipeline:
         record = asyncio.run(pipeline._stage_deploy())
         assert record.success
         assert pipeline._deployed_version is not None
+
+
+class TestEvolveConcurrency:
+    def test_parallel_evolution_max_concurrency(self):
+        import threading
+
+        active = 0
+        peak = 0
+        lock = threading.Lock()
+
+        class TrackingEngine:
+            def evolve(self, skill_file, trajectory_data):
+                nonlocal active, peak
+                with lock:
+                    active += 1
+                    peak = max(peak, active)
+                import time
+                time.sleep(0.02)
+                with lock:
+                    active -= 1
+                return f"PR for {skill_file}"
+
+        config = EvolveTrainConfig(evolution_concurrency=2)
+        pipeline = EvolveToTrainPipeline(config=config, evolution_engine=TrackingEngine())
+        record = asyncio.run(pipeline._stage_evolve(
+            skill_files=[f"skill_{i}.py" for i in range(6)],
+        ))
+        assert record.success
+        assert record.metrics["accepted"] == 6
+        assert peak <= 2, f"expected peak concurrency <= 2, got {peak}"
+
+    def test_async_evolve_engine_supported(self):
+        class AsyncEngine:
+            async def evolve(self, skill_file, trajectory_data):
+                return f"PR for {skill_file}"
+
+        config = EvolveTrainConfig(evolution_concurrency=2)
+        pipeline = EvolveToTrainPipeline(config=config, evolution_engine=AsyncEngine())
+        record = asyncio.run(pipeline._stage_evolve(skill_files=["a.py", "b.py"]))
+        assert record.success
+        assert record.metrics["accepted"] == 2
+
+    def test_failed_evolution_counts_as_rejected(self):
+        class FailingEngine:
+            def evolve(self, skill_file, trajectory_data):
+                if "bad" in skill_file:
+                    raise RuntimeError("boom")
+                return "PR ok"
+
+        pipeline = EvolveToTrainPipeline(evolution_engine=FailingEngine())
+        record = asyncio.run(pipeline._stage_evolve(
+            skill_files=["good.py", "bad.py", "also_bad.py"],
+        ))
+        assert record.success
+        assert record.metrics["accepted"] == 1
+        assert record.metrics["rejected"] == 2
+
+    def test_diversity_rejection_marks_accepted(self):
+        class DiversityEngine:
+            def evolve(self, skill_file, trajectory_data):
+                if "dup" in skill_file:
+                    return "# Diversity rejected: duplicate\n"
+                return "PR new"
+
+        pipeline = EvolveToTrainPipeline(evolution_engine=DiversityEngine())
+        record = asyncio.run(pipeline._stage_evolve(
+            skill_files=["new.py", "dup.py"],
+        ))
+        assert record.metrics["accepted"] == 1
+        assert record.metrics["rejected"] == 1

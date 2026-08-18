@@ -38,7 +38,7 @@ from zilli.server.schemas import (
     RouteResponse,
     Usage,
 )
-from zilli.utils.crypto import hash_api_key, verify_api_key
+from zilli.utils.crypto import hash_api_key
 from zilli.version import version
 
 logger = logging.getLogger("zilli.server")
@@ -91,7 +91,10 @@ class ZilliAppState:
         self.audit: AuditLogger = None  # type: ignore[assignment]
         self.cost_controller = None
         self.api_keys: set[str] = set()
+        self.tenant_keys: dict[str, str] = {}
         self.rate_limiter = RateLimiter()
+        from zilli.industry.workflows import WorkflowRegistry as _WorkflowRegistry
+        self.industry_registry: Optional[_WorkflowRegistry] = None
 
     def ensure_initialized(self):
         if self.registry is not None:
@@ -119,13 +122,30 @@ class ZilliAppState:
 
         keys_env = os.environ.get("ZILLI_API_KEYS", "")
         if keys_env:
-            self.api_keys = set(
-                hash_api_key(k.strip())
-                for k in keys_env.split(",") if k.strip()
-            )
+            for k in keys_env.split(","):
+                k = k.strip()
+                if not k:
+                    continue
+                if "@" in k:
+                    key, _, tenant = k.rpartition("@")
+                    if not key or not tenant:
+                        continue
+                    self.tenant_keys[hash_api_key(key)] = tenant
+                else:
+                    self.api_keys.add(hash_api_key(k))
+
+    def bind_tenant_key(self, api_key: str, tenant_id: str) -> None:
+        """Bind an API key to a tenant at runtime.
+
+        Requests presenting this key must send `X-Tenant-ID` matching
+        `tenant_id`, otherwise they are rejected with 401.
+        """
+        from zilli.tenancy import validate_tenant_id
+        validate_tenant_id(tenant_id)
+        self.tenant_keys[hash_api_key(api_key)] = tenant_id
 
     def verify_api_key(self, request: Request) -> str | None:
-        if not self.api_keys:
+        if not self.api_keys and not self.tenant_keys:
             client_ip = request.client.host if request.client else "unknown"
             if client_ip in ("127.0.0.1", "::1", "localhost"):
                 return None
@@ -137,12 +157,28 @@ class ZilliAppState:
             raise HTTPException(status_code=401, detail="Missing or invalid API key")
         auth = request.headers.get("Authorization", "")
         api_key = request.headers.get("X-API-Key", "")
+        token = ""
         if auth.startswith("Bearer "):
             token = auth[7:]
-            if any(verify_api_key(token, kh) for kh in self.api_keys):
+        elif api_key:
+            token = api_key
+        if token:
+            kh = hash_api_key(token)
+            if kh in self.api_keys:
                 return token
-        if api_key and any(verify_api_key(api_key, kh) for kh in self.api_keys):
-            return api_key
+            bound_tenant = self.tenant_keys.get(kh)
+            if bound_tenant is not None:
+                requested_tenant = request.headers.get("X-Tenant-ID", "default")
+                if requested_tenant == bound_tenant:
+                    return token
+                logger.warning(
+                    "Rejected tenant-scoped key: bound=%s requested=%s",
+                    bound_tenant, requested_tenant,
+                )
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"API key not authorized for tenant '{requested_tenant}'",
+                )
         client_ip = request.client.host if request.client else "unknown"
         logger.warning("Unauthorized API access attempt from %s", client_ip)
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
@@ -310,7 +346,7 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
         body: IndustryRequest,
         x_tenant_id: str = Header("default"),
     ):
-        from zilli.industry import IndustryType, WorkflowRegistry
+        from zilli.industry import IndustryType
 
         try:
             ind = IndustryType(industry_type)
@@ -322,10 +358,13 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
             )
 
         state.ensure_initialized()
-        registry = WorkflowRegistry(
-            model_registry=state.registry,
-            config=state.config,
-        )
+        if state.industry_registry is None:
+            from zilli.industry import WorkflowRegistry
+            state.industry_registry = WorkflowRegistry(
+                model_registry=state.registry,
+                config=state.config,
+            )
+        registry = state.industry_registry
 
         try:
             result = await registry.run(
@@ -349,6 +388,29 @@ def create_app(config: Optional[ZilliConfig] = None) -> FastAPI:
             total_duration_ms=result.total_duration_ms,
             error=result.error,
         )
+
+    @app.get("/v1/industry/list")
+    async def industry_list():
+        state.ensure_initialized()
+        if state.industry_registry is None:
+            from zilli.industry import WorkflowRegistry
+            state.industry_registry = WorkflowRegistry(
+                model_registry=state.registry,
+                config=state.config,
+            )
+        return {"industries": state.industry_registry.list_industries()}
+
+    @app.post("/v1/industry/reload")
+    async def industry_reload():
+        state.ensure_initialized()
+        if state.industry_registry is None:
+            from zilli.industry import WorkflowRegistry
+            state.industry_registry = WorkflowRegistry(
+                model_registry=state.registry,
+                config=state.config,
+            )
+        report = state.industry_registry.reload_templates()
+        return report
 
     # ── Models ──────────────────────────────────────────────────────────
 

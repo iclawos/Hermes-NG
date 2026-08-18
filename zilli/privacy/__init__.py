@@ -11,6 +11,7 @@ from zilli.privacy.consent import (
     DataUse,
 )
 from zilli.privacy.engine import PrivacyEngine, PrivacyVerdict, SanitizationMode
+from zilli.privacy.entities import EntityMap, EntityReplacer, EntityRestorer
 from zilli.privacy.policy import (
     CloudProvider,
     DataGovernancePolicy,
@@ -25,4 +26,5 @@ __all__ = [
     "ReIDAssessor", "ReIDAssessment", "ReIDRisk",
     "ConsentManager", "ConsentRecord", "ConsentStatus", "DataUse",
     "PrivacyEngine", "PrivacyVerdict", "SanitizationMode",
+    "EntityMap", "EntityReplacer", "EntityRestorer",
 ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -57,6 +58,7 @@ class EvolveTrainConfig:
     degradation_threshold: float = 0.1
     diversity_threshold: float = 0.5
     max_cycles: int = 10
+    evolution_concurrency: int = 4
 
 
 class EvolveToTrainPipeline:
@@ -146,17 +148,37 @@ class EvolveToTrainPipeline:
         rejected = 0
         prs: list[str] = []
 
-        for skill_file in files_to_evolve:
-            try:
-                pr = self._evolution_engine.evolve(skill_file, trajectories)
-                if "# Diversity rejected" in pr:
-                    rejected += 1
-                else:
-                    accepted += 1
-                prs.append(pr)
-            except Exception as e:
-                logger.warning("Evolution failed for %s: %s", skill_file, e)
+        evolver = getattr(self._evolution_engine, "evolve", None)
+        if evolver is None:
+            return CycleRecord(
+                stage=EvolveTrainStage.EVOLVE, success=False,
+                message="No evolve method on evolution engine",
+            )
+
+        sem = asyncio.Semaphore(getattr(self.config, "evolution_concurrency", 4))
+        is_async = asyncio.iscoroutinefunction(evolver)
+
+        async def _evolve_one(skill_file: str) -> str | None:
+            async with sem:
+                try:
+                    if is_async:
+                        return await evolver(skill_file, trajectories)
+                    return await asyncio.to_thread(evolver, skill_file, trajectories)
+                except Exception as e:
+                    logger.warning("Evolution failed for %s: %s", skill_file, e)
+                    return None
+
+        results = await asyncio.gather(*(_evolve_one(f) for f in files_to_evolve))
+
+        for pr in results:
+            if not pr:
                 rejected += 1
+                continue
+            if "# Diversity rejected" in pr:
+                rejected += 1
+            else:
+                accepted += 1
+            prs.append(pr)
 
         return CycleRecord(
             stage=EvolveTrainStage.EVOLVE,

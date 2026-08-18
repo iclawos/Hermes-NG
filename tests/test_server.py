@@ -65,6 +65,15 @@ def client_no_keys():
     os.environ.pop("ZILLI_API_KEYS", None)
 
 
+@pytest.fixture
+def client_with_tenant_keys():
+    os.environ["ZILLI_API_KEYS"] = "sk-acme@acme,sk-law@law_firm,sk-global"
+    app = create_app()
+    with TestClient(app) as c:
+        yield c
+    del os.environ["ZILLI_API_KEYS"]
+
+
 class TestHealth:
     def test_healthz(self, client):
         resp = client.get("/healthz")
@@ -416,6 +425,115 @@ class TestAuth:
     def test_fail_closed_no_keys_health_still_public(self, client_no_keys):
         resp = client_no_keys.get("/v1/health")
         assert resp.status_code == 200
+
+
+class TestTenantKeyBinding:
+    def test_tenant_scoped_key_matches_tenant(self, client_with_tenant_keys):
+        resp = client_with_tenant_keys.get(
+            "/v1/models/internal",
+            headers={"Authorization": "Bearer sk-acme", "X-Tenant-ID": "acme"},
+        )
+        assert resp.status_code == 200
+
+    def test_tenant_scoped_key_cross_tenant_rejected(self, client_with_tenant_keys):
+        resp = client_with_tenant_keys.get(
+            "/v1/models/internal",
+            headers={"Authorization": "Bearer sk-acme", "X-Tenant-ID": "law_firm"},
+        )
+        assert resp.status_code == 401
+
+    def test_tenant_scoped_key_without_tenant_header_rejected(self, client_with_tenant_keys):
+        resp = client_with_tenant_keys.get(
+            "/v1/models/internal",
+            headers={"Authorization": "Bearer sk-acme"},
+        )
+        assert resp.status_code == 401
+
+    def test_forged_tenant_key_rejected(self, client_with_tenant_keys):
+        resp = client_with_tenant_keys.get(
+            "/v1/models/internal",
+            headers={"Authorization": "Bearer sk-law", "X-Tenant-ID": "acme"},
+        )
+        assert resp.status_code == 401
+
+    def test_unscoped_key_allows_any_tenant(self, client_with_tenant_keys):
+        for tenant in ("acme", "law_firm", "default"):
+            resp = client_with_tenant_keys.get(
+                "/v1/models/internal",
+                headers={"Authorization": "Bearer sk-global", "X-Tenant-ID": tenant},
+            )
+            assert resp.status_code == 200
+
+    def test_tenant_scoped_key_rejected_without_auth(self, client_with_tenant_keys):
+        resp = client_with_tenant_keys.get(
+            "/v1/models/internal",
+            headers={"X-Tenant-ID": "acme"},
+        )
+        assert resp.status_code == 401
+
+    def test_route_uses_bound_tenant_context(self, client_with_tenant_keys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        resp = client_with_tenant_keys.post(
+            "/v1/route",
+            headers={"Authorization": "Bearer sk-acme", "X-Tenant-ID": "acme"},
+            json={"request": "hello world"},
+        )
+        assert resp.status_code in (200, 500)
+
+
+class TestRuntimeTenantKeyBinding:
+    def test_bind_tenant_key_rejects_invalid_tenant(self):
+
+        from zilli.server.app import ZilliAppState
+        state = ZilliAppState()
+        state.api_keys = set()
+        state.tenant_keys = {}
+        try:
+            state.bind_tenant_key("sk-x", "../evil")
+        except ValueError:
+            pass
+        else:
+            pytest.fail("expected ValueError for invalid tenant id")
+
+    def test_bind_tenant_key_enforces_scope(self):
+        from types import SimpleNamespace
+
+        from zilli.server.app import ZilliAppState
+        state = ZilliAppState()
+        state.api_keys = set()
+        state.tenant_keys = {}
+        state.bind_tenant_key("sk-x", "acme")
+
+        ok_req = SimpleNamespace(
+            headers={"Authorization": "Bearer sk-x", "X-Tenant-ID": "acme"},
+            client=SimpleNamespace(host="10.0.0.5"),
+        )
+        assert state.verify_api_key(ok_req) == "sk-x"
+
+        bad_req = SimpleNamespace(
+            headers={"Authorization": "Bearer sk-x", "X-Tenant-ID": "other"},
+            client=SimpleNamespace(host="10.0.0.5"),
+        )
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            state.verify_api_key(bad_req)
+        assert exc_info.value.status_code == 401
+
+    def test_unbound_key_still_rejected(self):
+        from types import SimpleNamespace
+
+        from zilli.server.app import ZilliAppState
+        state = ZilliAppState()
+        state.api_keys = set()
+        state.tenant_keys = {}
+        req = SimpleNamespace(
+            headers={"Authorization": "Bearer sk-unknown", "X-Tenant-ID": "acme"},
+            client=SimpleNamespace(host="10.0.0.5"),
+        )
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            state.verify_api_key(req)
+        assert exc_info.value.status_code == 401
 
 
 class TestSwagger:
