@@ -157,6 +157,15 @@ def main():
     unknowns_pitch = unknowns_sub.add_parser("pitch", help="打包评审文档")
     unknowns_pitch.add_argument("title", type=str, help="文档标题")
 
+    swarm_parser = sub.add_parser("swarm", help="L6 群智能：多 Agent 协作（分解→路由→共识）")
+    swarm_parser.add_argument("task", type=str, nargs="?", default="",
+                              help="要协作完成的任务描述")
+    swarm_parser.add_argument("--industry", type=str, default="", help="行业工作流标识")
+    swarm_parser.add_argument("--difficulty", type=float, default=0.8,
+                              help="PPM 难度估计（≥0.7 触发分解，默认 0.8）")
+    swarm_parser.add_argument("--roles", action="store_true",
+                              help="列出内置 Agent 角色")
+
     soak_parser = sub.add_parser("soak", help="端到端自进化闭环持续运行（生产验证）")
     soak_parser.add_argument("--skills-dir", type=str, default="./examples/skills",
                              help="技能目录")
@@ -266,6 +275,8 @@ def main():
         _run_audit(args)
     elif args.command == "unknowns":
         _run_unknowns(args)
+    elif args.command == "swarm":
+        _run_swarm(args)
 
     else:
         parser.print_help()
@@ -868,6 +879,42 @@ def _run_unknowns(args: argparse.Namespace):
         pitch = asyncio.run(discovery.package_pitch(args.title))
         print(pitch)
         print(f"\nSaved to: {discovery.work_dir}/pitch.md")
+
+
+def _run_swarm(args: argparse.Namespace):
+    """L6 群智能 CLI：多 Agent 协作执行任务。"""
+    import asyncio
+
+    from zilli.swarm.consensus import ConsensusEngine
+    from zilli.swarm.decomposer import TaskDecomposer
+    from zilli.swarm.orchestrator import SwarmOrchestrator
+    from zilli.swarm.roles import list_roles
+    from zilli.swarm.router import AgentRouter
+
+    if args.roles:
+        print("内置 Agent 角色：")
+        print("=" * 40)
+        for role in list_roles():
+            print(f"  {role}")
+        return
+
+    async def run():
+        decomposer = TaskDecomposer(min_difficulty=0.7)
+        router = AgentRouter()
+        consensus = ConsensusEngine()
+        orchestrator = SwarmOrchestrator(decomposer, router, consensus)
+        result = await orchestrator.execute(args.task, industry=args.industry)
+        print(f"任务: {args.task}")
+        print(f"成功: {'✅' if result.success else '❌'}")
+        if result.error:
+            print(f"错误: {result.error}")
+        print(f"子任务: {[s.role for s in result.subtasks]}")
+        print("最终产物:")
+        print("-" * 40)
+        print(result.final_text or "(empty)")
+        return result
+
+    asyncio.run(run())
 
 
 def _run_audit(args: argparse.Namespace):

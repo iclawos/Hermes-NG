@@ -1,6 +1,6 @@
 # Zilli：面向 AI 自主开发的下一代 MOM（模型的模型）工具工程方案（合并版）
 
-**当前版本 v1.0.0 | 1204 tests · ruff 0 · pyright 0 · 覆盖率 90%**
+**当前版本 v1.0.0 | 1244 tests · ruff 0 · pyright 0 · 覆盖率 90%**
 
 > 快速开始：`pip install -e ".[all]"` → `zilli --version` → `zilli soak`（端到端闭环）
 > 文档：`docs/`（tutorial / howto / explanation / reference × 4 / PRD / 安全审计）

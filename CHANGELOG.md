@@ -2,6 +2,27 @@
 
 ## Unreleased (2026-08-19)
 
+### L6 群智能（Swarm Intelligence）里程碑
+
+多 Agent 协作骨架落地。RFC-006 + `zilli/swarm/` 包 + `zilli swarm` CLI。
+
+1244 tests / ruff 0 / pyright 0 / 覆盖率 90%。
+
+#### Added
+- **`docs/rfc-006-l6-swarm-intelligence.md`**：L6 群智能设计 RFC——Agent 间路由、任务分解、共识机制；与 MOM 三层复用关系、产物图（Artifact Graph）、四级共识链、里程碑/验收指标
+- **`zilli/swarm/` 包**（6 模块）：
+  - `roles.py`：AgentRoleSpec 角色注册表（researcher/architect/writer/verifier/reviewer/executor，工具白名单+上下文预算+回退角色）
+  - `artifacts.py`：Artifact + ArtifactGraph（产物 DAG，schema 校验、状态机、GC）+ SubTask
+  - `decomposer.py`：TaskDecomposer（PPM 难度阈值、扇出上限、无环校验、依赖解析）
+  - `consensus.py`：ConsensusEngine（四级共识链：多数→权重投票→仲裁→人工升级）
+  - `router.py`：AgentRouter（子任务→角色+模型槽位，未知角色回退 executor，角色回退）
+  - `orchestrator.py`：SwarmOrchestrator（分解→路由→并行执行→产物图→验证→反馈，并发上限、死锁检测）
+- **`zilli swarm` CLI**：`zilli swarm "任务" --industry X --difficulty 0.8`；`zilli swarm --roles` 列出角色
+- **`tests/test_swarm.py`**：40 tests（roles/artifacts/decomposer/consensus/router/orchestrator/CLI）
+
+#### Tests
+- 1204 → **1244** tests
+
 ### 覆盖率 90% 里程碑（CLI + 小模块补测）
 
 1204 tests / ruff 0 / pyright 0 / 覆盖率 90.0%。

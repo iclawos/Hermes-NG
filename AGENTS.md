@@ -78,7 +78,7 @@ zilli/                   # Python 包根目录
 pip install -e .
 pip install -e ".[train,dev]"  # 训练 + 开发依赖
 
-# 运行测试（1204 tests）
+# 运行测试（1244 tests）
 python3 -m pytest tests/ -q
 
 # 静态检查（0 errors）
