@@ -1,7 +1,7 @@
 import pytest
 
 from zilli.models.base import GenerationResult, ModelBackend
-from zilli.models.config import ModelConfig, ModelProfile, ModelRole
+from zilli.models.config import DeploymentType, ModelConfig, ModelProfile, ModelRole
 from zilli.models.registry import ModelRegistry
 
 # ── Mock backend for testing ─────────────────────────────────────────────
@@ -148,6 +148,88 @@ class TestModelRegistry:
         result = asyncio.run(registry.generate(ModelRole.PLANNER, "hello"))
         assert result.error != ""
         assert result.text == ""
+
+    def test_generate_falls_through_unhealthy_then_succeeds(self):
+        from zilli.models.base import GenerationResult
+
+        class _Healthy:
+            def __init__(self, cfg): self.cfg = cfg
+            async def health_check(self): return True
+            async def generate(self, **kw):
+                return GenerationResult(text="ok", model_name=self.cfg.name)
+
+        class _Unhealthy:
+            def __init__(self, cfg): self.cfg = cfg
+            async def health_check(self): return False
+            async def generate(self, **kw):
+                raise AssertionError("should not be called")
+
+        class _ErrorBackend:
+            def __init__(self, cfg): self.cfg = cfg
+            async def health_check(self): return True
+            async def generate(self, **kw):
+                return GenerationResult(text="", model_name=self.cfg.name,
+                                        error="boom")
+
+        class _RaiseBackend:
+            def __init__(self, cfg): self.cfg = cfg
+            async def health_check(self): return True
+            async def generate(self, **kw):
+                raise RuntimeError("conn refused")
+
+        profile = ModelProfile(models=[
+            ModelConfig(name="a", model_id="a", role=ModelRole.PLANNER),
+            ModelConfig(name="b", model_id="b", role=ModelRole.PLANNER),
+        ])
+        registry = ModelRegistry(profile)
+        # unhealthy first -> falls to healthy second
+        registry._backends["a"] = _Unhealthy(profile.models[0])
+        registry._backends["b"] = _Healthy(profile.models[1])
+        import asyncio
+        r = asyncio.run(registry.generate(ModelRole.PLANNER, "hi"))
+        assert r.text == "ok" and r.model_name == "b"
+
+        # error-bearing result -> falls to next
+        registry._backends["a"] = _ErrorBackend(profile.models[0])
+        registry._backends["b"] = _Healthy(profile.models[1])
+        r = asyncio.run(registry.generate(ModelRole.PLANNER, "hi"))
+        assert r.model_name == "b"
+
+        # exception -> falls to next
+        registry._backends["a"] = _RaiseBackend(profile.models[0])
+        registry._backends["b"] = _Healthy(profile.models[1])
+        r = asyncio.run(registry.generate(ModelRole.PLANNER, "hi"))
+        assert r.model_name == "b"
+
+        # all fail -> aggregated error
+        registry._backends["a"] = _Unhealthy(profile.models[0])
+        registry._backends["b"] = _ErrorBackend(profile.models[1])
+        r = asyncio.run(registry.generate(ModelRole.PLANNER, "hi"))
+        assert r.error and "All models" in r.error
+
+    def test_generate_local_and_cloud(self):
+        from zilli.models.base import GenerationResult
+
+        class _Healthy:
+            def __init__(self, cfg): self.cfg = cfg
+            async def health_check(self): return True
+            async def generate(self, **kw):
+                return GenerationResult(text="ok", model_name=self.cfg.name)
+
+        profile = ModelProfile(models=[
+            ModelConfig(name="local1", model_id="l", role=ModelRole.EXECUTOR,
+                        deployment=DeploymentType.LOCAL),
+            ModelConfig(name="cloud1", model_id="c", role=ModelRole.REVIEWER,
+                        deployment=DeploymentType.CLOUD),
+        ])
+        registry = ModelRegistry(profile)
+        registry._backends["local1"] = _Healthy(profile.models[0])
+        registry._backends["cloud1"] = _Healthy(profile.models[1])
+        import asyncio
+        assert asyncio.run(registry.generate_local("hi")).model_name == "local1"
+        assert asyncio.run(registry.generate_cloud("hi")).model_name == "cloud1"
+        r = asyncio.run(registry.generate_local("hi", temperature=0.5))
+        assert r.model_name == "local1"
 
 
 # ── GenerationResult tests ─────────────────────────────────────────────

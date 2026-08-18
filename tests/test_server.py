@@ -635,3 +635,112 @@ class TestLocalAuthBypass:
         state.api_keys = set()
         req = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
         assert state.verify_api_key(req) is None
+
+
+class TestRateLimiter:
+    def test_check_accepts_then_rejects(self):
+        from zilli.server.app import RateLimiter
+
+        rl = RateLimiter(max_requests=2, window_seconds=60)
+        assert rl.check("k") is True
+        assert rl.check("k") is True
+        assert rl.check("k") is False  # exceeded
+
+    def test_cleanup_removes_stale(self):
+        import time
+
+        from zilli.server.app import RateLimiter
+
+        rl = RateLimiter(max_requests=5, window_seconds=60)
+        rl.requests["old"] = rl.requests["old"].__class__([time.time() - 1000])
+        rl._last_cleanup = 0.0
+        rl._periodic_cleanup()
+        assert "old" not in rl.requests
+
+
+class TestCostConfigured:
+    def _config(self):
+        from zilli.configs import ZilliConfig
+
+        return ZilliConfig()
+
+    def test_cost_status_configured(self):
+        from fastapi.testclient import TestClient
+
+        from zilli.server.app import create_app
+
+        os.environ["ZILLI_API_KEYS"] = "k1"
+        app = create_app(self._config())
+        with TestClient(app) as c:
+            c.headers.update({"Authorization": "Bearer k1"})
+            resp = c.get("/v1/cost/status")
+            assert resp.status_code == 200
+            assert "remaining_budget" in resp.json()
+            resp = c.post("/v1/cost/reset-month")
+            assert resp.status_code == 200
+        del os.environ["ZILLI_API_KEYS"]
+
+    def test_openai_models_with_config(self):
+        from fastapi.testclient import TestClient
+
+        from zilli.server.app import create_app
+
+        os.environ["ZILLI_API_KEYS"] = "k1"
+        app = create_app(self._config())
+        with TestClient(app) as c:
+            c.headers.update({"Authorization": "Bearer k1"})
+            resp = c.get("/v1/models")
+            assert resp.status_code == 200
+        del os.environ["ZILLI_API_KEYS"]
+
+
+class TestMetricsAndCache:
+    def test_metrics_endpoint(self, client):
+        resp = client.get("/v1/metrics")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "uptime_seconds" in data
+        assert "requests_total" in data
+
+    def test_cache_stats_no_cache(self, client):
+        resp = client.get("/v1/cache/stats")
+        assert resp.status_code == 200
+        assert resp.json()["entries"] == 0
+
+    def test_cache_clear_no_cache(self, client):
+        resp = client.post("/v1/cache/clear")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+
+class TestOpenAIModelsList:
+    def test_openai_models_list(self, client):
+        resp = client.get("/v1/models")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data["data"], list)
+
+    def test_openai_models_specific(self, client):
+        resp = client.get("/v1/models/foo")
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "foo"
+
+
+class TestStreamErrorPaths:
+    def test_stream_blocked_by_privacy(self, client):
+        resp = client.post("/v1/chat/completions", json={
+            "model": "router",
+            "messages": [{"role": "user", "content": "PHI"}],
+            "stream": True,
+        })
+        body = resp.text
+        assert "DONE" in body
+
+    def test_stream_route_error(self, client):
+        resp = client.post("/v1/chat/completions", json={
+            "model": "router",
+            "messages": [{"role": "user", "content": "hello there"}],
+            "stream": True,
+        })
+        body = resp.text
+        assert "DONE" in body

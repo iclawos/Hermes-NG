@@ -89,6 +89,9 @@ class UnknownsDiscovery:
         if self._unknowns_file.exists():
             try:
                 data = json.loads(self._unknowns_file.read_text())
+                for u in data:
+                    if "category" in u and not isinstance(u["category"], UnknownCategory):
+                        u["category"] = UnknownCategory(u["category"])
                 self._unknowns = [UnknownItem(**u) for u in data]
             except Exception as e:
                 logger.warning("Failed to load unknowns: %s", e)

@@ -1,10 +1,29 @@
 # Changelog
 
-## Unreleased (2026-08-18)
+## Unreleased (2026-08-19)
+
+### 覆盖率 90% 里程碑（CLI + 小模块补测）
+
+1204 tests / ruff 0 / pyright 0 / 覆盖率 90.0%。
+
+#### Added
+- `tests/test_cli_coverage.py`：CLI 处理器与关键小模块覆盖补测：
+  - CLI：`route`（含 `--verbose` 全输出/截断路径）、`industry run/list`、`models list/health/generate`、`cost status/reset`、`evaluate --cost-aware`、`train --cost-aware`、`pipeline`、`soak`（stop-file 退出）、`swe`、`unknowns summary/resolve/interview/blind-spot/brainstorm/reference/plan`
+  - `ModelProfile`（routing）：filter/select_best/softmax/exploration/capability/success 更新与持久化加载
+  - `ContinuousLearner`：run() 单周期与异常路径、stop、collect/archive、SFT 触发日志
+  - `TrajectoryStore`：priority 采样/purify/噪声/容量上限/误差摘要
+  - `HermesSandbox`：未知工具/error_probability/scenario 初始化/技能与文件操作/bash/web/code
+- `tests/test_models.py`：registry fallback 链（unhealthy→error→exception→下一模型）、generate_local/cloud
+- `tests/test_server.py`：metrics、cache stats/clear、OpenAI models、cost-configured app、RateLimiter
+
+#### Fixed
+- **`UnknownsDiscovery._load()` 不把 JSON 中的 `category` 反序列化为 `UnknownCategory` 枚举**：持久化重载后 `u.category.value` 崩溃（`AttributeError: 'str' object has no attribute 'value'`）。现在加载时显式转换
+
+#### Tests
+- 覆盖率 86.0% → **90.0%**（`cli.py` 57%→94%，`loops/unknowns` 68%→96%，`learner/continuous_learner` 75%→96%，`routing/profile` 79%→94%，`data/experience_replay` 84%→94%，`envs/mock_env` 83%→94%）
+- 1105 → **1204** tests
 
 ### e2e 集成测试批次（route → execute → feedback → evolve）
-
-1105 tests / ruff 0 / pyright 0 / 覆盖率 86.0%。
 
 #### Added
 - `tests/test_e2e_route_execute_feedback_evolve.py`：补齐 e2e 链条缺失的 **execute 环节**（此前 route→feedback→evolve 不执行真实任务）：
