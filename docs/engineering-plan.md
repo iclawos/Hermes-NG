@@ -410,7 +410,7 @@ MetaLoopRunner.run(input_data)
 | P2 | ✅ MOM 行业模板动态加载（`ZILLI_INDUSTRY_CONFIG` YAML + `/v1/industry/reload`） | `industry/` | — | F-15 |
 | P3 | ✅ EntityReplacer / EntityRestorer 嵌套结构（`zilli/privacy/entities.py`） | `privacy/` | — | F-0.3 |
 | P1 | Rust crate 演化核心、loop 引擎迁移 | `zilli-rs/` | 24h | F-24 |
-| P2 | 补充集成测试（e2e route → execute → feedback → evolve） | `tests/` | 8h | — |
+| P2 | ✅ 补充集成测试（route → execute → feedback → evolve，含执行环节 + fallback 链；2026-08-18，1087→1105 tests） | `tests/` | — | — |
 
 ---
 
@@ -442,7 +442,7 @@ MetaLoopRunner.run(input_data)
 | 端到端进化训练管线 | Evolve → Train → Deploy → Monitor 全自动 | 单轮 < 4h，回滚 < 5min | 已有实现 |
 | Rust 演化核心 | Loop 引擎、PPM 预测迁移至 Rust | 性能提升 10×，功能一致性 100% | 待做 |
 | 多租户密钥绑定 | API Key 注册时绑定 tenant_id | 跨租户访问 401，伪造租户 401 | ✅ 2026-08-18 |
-| 覆盖率 90% | 新增 200+ 测试 | pytest 报告 | 进行中（85%） |
+| 覆盖率 90% | 新增 200+ 测试 | pytest 报告 | 进行中（86.0%，+7 new tests） |
 | L6 群智能设计 | Agent 间路由、任务分解、共识机制 | RFC 文档 | 待做 |
 | MOM 行业模板动态加载 | 运行时热更新行业配置 | 无重启加载 | ✅ 2026-08-18 |
 | EntityReplacer/Restorer 嵌套 | 占位符替换回替，支持嵌套结构 | 占位符替换准确率 100% | ✅ 2026-08-18 |

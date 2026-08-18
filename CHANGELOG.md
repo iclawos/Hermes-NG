@@ -2,6 +2,25 @@
 
 ## Unreleased (2026-08-18)
 
+### e2e 集成测试批次（route → execute → feedback → evolve）
+
+1105 tests / ruff 0 / pyright 0 / 覆盖率 86.0%。
+
+#### Added
+- `tests/test_e2e_route_execute_feedback_evolve.py`：补齐 e2e 链条缺失的 **execute 环节**（此前 route→feedback→evolve 不执行真实任务）：
+  - route → `Agent` 真实子进程执行 → feedback → evolve 全链路
+  - 执行失败轨迹驱动 error_handling 进化
+  - route → `HybridExecutor`（mock registry）→ feedback
+  - PPM 分类器 Python 回退路径难度分支全覆盖（coding complex/arch、reasoning math/analysis、analysis bonus、chat 负向、自定义权重、unknown）——强制禁用 rust 热路径以覆盖纯 Python 分支
+  - ModelRegistry fallback 链（注册/未知后端跳过/无健康模型/部署路径/主模型失败回退下一模型）
+
+#### Fixed
+- **`ModelRegistry.generate()` / `_generate_by_deployment()` 不检查 `GenerationResult.error`**：此前主模型返回 error-bearing 结果会直接返回而非回退链上下一模型，fallback 机制失效。现在 error 结果视为失败并继续尝试下一模型（`lower_tier` 语义对齐）
+
+#### Tests
+- 覆盖率 85.0% → **86.0%**（`ppm_classifier` 56%→73%，`models/registry` 60%→81%）
+- 1087 → **1105** tests
+
 ### v1.1.0 候选批次（T-10 + 并发 + 热更新 + 嵌套回替）
 
 1087 tests / ruff 0 / pyright 0 / 覆盖率 85.0%。

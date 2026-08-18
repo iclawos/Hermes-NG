@@ -107,11 +107,16 @@ class ModelRegistry:
                     logger.warning("Model %s unhealthy, trying next", cfg.name)
                     errors.append(f"{cfg.name}: unhealthy")
                     continue
-                return await backend.generate(
+                result = await backend.generate(
                     prompt=prompt,
                     max_tokens=max_tokens or cfg.max_tokens,
                     temperature=temperature if temperature is not None else cfg.temperature,
                 )
+                if result.error:
+                    logger.warning("Model %s returned error: %s, trying next", cfg.name, result.error)
+                    errors.append(f"{cfg.name}: {result.error}")
+                    continue
+                return result
             except Exception as e:
                 logger.warning("Model %s failed: %s, trying next", cfg.name, e)
                 errors.append(f"{cfg.name}: {e}")
@@ -137,11 +142,15 @@ class ModelRegistry:
                 if not await backend.health_check():
                     errors.append(f"{cfg.name}: unhealthy")
                     continue
-                return await backend.generate(
+                result = await backend.generate(
                     prompt=prompt,
                     max_tokens=max_tokens or cfg.max_tokens,
                     temperature=temperature if temperature is not None else cfg.temperature,
                 )
+                if result.error:
+                    errors.append(f"{cfg.name}: {result.error}")
+                    continue
+                return result
             except Exception as e:
                 errors.append(f"{cfg.name}: {e}")
         return GenerationResult(
