@@ -51,12 +51,10 @@ loss = s.compute_loss_torch(samples)  # runs on GPU if available
 s = DistillationScheduler(log_dir="./ckpt_demo")
 s.add_batch(samples_100)
 s.run_cycle()
-s.save_checkpoint("./ckpt.json")
+path = s.save_checkpoint("./ckpt.json")  # returns written path
 
-# Later session
-s2 = DistillationScheduler(log_dir="./ckpt_demo")
-restored = s2.load_checkpoint("./ckpt.json")
-assert restored
+# Later session — load_checkpoint 是类方法，返回恢复后的新实例
+s2 = DistillationScheduler.load_checkpoint("./ckpt.json")
 s2.add_batch(samples_50)
 s2.run_cycle()  # continues from previous state
 ```

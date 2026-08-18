@@ -27,16 +27,17 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 | 预算/成本控制 | ✅ 生产就绪 | DynamicSOTA + 频率控制器 + 月度预算 + SOTA 硬约束（max\_sota\_ratio） |
 | 隐私合规 | ✅ 生产就绪 | PII 检测、脱敏、审计日志、数据隔离 |
 | 合规报告导出 CLI | ✅ v0.5.0 新增 | `zilli audit export --framework gdpr|hipaa|soc2|...` |
-| Streamlit 管理台 | ✅ 生产就绪 | 登录鉴权（admin/viewer 角色）、审计浏览、成本监控、PPM Stats、自动刷新 |
-| API 服务器 | ✅ 生产就绪 | FastAPI，OpenAI 兼容接口 |
+| Streamlit 管理台 | ✅ 生产就绪 | 登录鉴权（admin/viewer 角色）、审计浏览、成本监控、PPM Stats、自动刷新；强制配置 `ZILLI_DASHBOARD_PASSWORD`/`ZILLI_DASHBOARD_USERS` |
+| API 服务器 | ✅ 生产就绪 | FastAPI，OpenAI 兼容接口；fail-closed 鉴权（无 `ZILLI_API_KEYS` 时非本地请求 401） |
 | Celery 分布式工作流 | ✅ 生产就绪 | DAG 持久化执行、任务重试、结果回调 |
 | ChromaDB 向量存储 | ✅ 生产就绪 | 语义检索、元数据过滤、集合管理 |
 | 行业工作流 | ✅ 生产就绪 | 法律/医疗/金融/教育合规路由 |
 | SWE-bench 修复 | ✅ 生产就绪 | Bug 复现 → 探索 → 诊断 → 修复 → 验证 |
 | DAG 可视化 | ✅ v0.5.0 新增 | `TaskDAG.to\_mermaid()` 流程图导出 |
 | CI/CD | ✅ v0.5.0 新增 | GitHub Actions：lint + pyright typecheck + 多版本测试 |
-| Rust 辅助库 | 📋 已决策 | 项目内 Rust helper crate（尚未实现） |
-| 多租户支持 | 📋 规划中 | 租户隔离的数据 + 配置 + 路由 |
+| Rust 辅助库 | ✅ v1.0.0 生产就绪 | `zilli-rs` 热路径（PPM 预测 + 代码指纹），PyO3 绑定 `zilli_hotpath`（0.054ms） |
+| 多租户支持 | ✅ v1.0.0 生产就绪 | TenantManager YAML 持久化 + /v1/tenants 端点 + 数据命名空间隔离 |
+| 端到端持续运行器 | ✅ v1.0.0 生产就绪 | `zilli soak` 健康监控 + 崩溃恢复 + 指标落盘 |
 
 
 ## 2. 目标用户
@@ -264,7 +265,7 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 
 | 需求 | 目标 | 当前状态 | 衡量方式 |
 | - | - | - | - |
-| 测试覆盖 | \> 85% | 73%（770 tests / 0 warnings） | pytest 覆盖率报告 |
+| 测试覆盖 | \> 85% | ✅ 85.1%（1028 tests / 0 warnings） | pytest 覆盖率报告 |
 | 静态检查 | 0 errors | ✅ ruff 0 / pyright 0 | CI 强制门禁 |
 | 路由延迟 | PPM 预测 \< 10ms | ✅ | latency\_ms 统计 |
 | 缓存命中率 | \> 60% | ✅ OrderedDict LRU | PPM cache hit\_rate |
@@ -388,17 +389,31 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 
 - 异步死锁修复、反馈批量早触发、ppm 循环导入拆分
 
-- 770 测试通过，ruff 0 errors，pyright 0 errors
+- 765 测试通过，ruff 0 errors，pyright 0 errors
 
-### Phase 8（规划中 📋）
+### Phase 8 v0.6.0（已完成 ✅）
 
-- Rust 辅助库实现（zilli-rs 热路径）
+- Rust 辅助库热路径实现（zilli-rs + PyO3 绑定 `zilli_hotpath`）
 
-- 多租户支持（租户隔离的数据 + 配置 + 路由）
+- 多租户支持（TenantManager YAML 持久化 + /v1/tenants 端点 + 数据隔离）
 
-- PPM training 集成到完整生产反馈闭环
+- PPM training 集成到完整生产反馈闭环（auto-train）
 
 - Harness 模式在真实技能库上运行验证
 
-- 测试覆盖率 73% → 85%+
+- Dashboard 无头测试（streamlit.testing.v1）
+
+- 测试覆盖率 → 85.1%（972 → 1017 → 1028 tests）
+
+### Phase 9 v1.0.0（已完成 ✅）
+
+- 模型化 PPM 默认分类器（sklearn ONNX，acc 1.0 / RMSE 0.044），regex+rust 回退
+
+- `zilli soak` 端到端持续运行器（健康监控 + 崩溃恢复 + 指标落盘）
+
+- API server 审计追踪（route\_decision / model\_call 落盘）
+
+- 参考文档 × 4 + 安全审计报告
+
+- 1028 tests / ruff 0 / pyright 0 / 覆盖率 85.1%
 

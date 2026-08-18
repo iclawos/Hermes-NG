@@ -39,45 +39,35 @@ Zilli（原 Hermes-NG）是一个面向 AI 自主开发的下一代 Agent 工具
 
 ## 项目结构
 
+> 完整模块清单与文件数以 `docs/engineering-plan.md` §2.1（经核实与代码一致）为准。当前为 v1.0.0，38 个顶层条目。
+
 ```
 zilli/                   # Python 包根目录
 ├── __init__.py          # 顶层导出（BaseAction 等）
-├── cli.py               # CLI 入口（zilli）
-├── version.py           # 版本号
+├── cli.py               # CLI 入口（zilli，14 顶层子命令）
+├── version.py           # 版本号（1.0.0）
 ├── run_training.py      # 训练主入口
-├── schema/
-│   ├── __init__.py
-│   └── actions.py       # Pydantic 动作基类（BaseAction）
-├── tasks/
-│   ├── __init__.py      # load_tasks() + TaskRunner
-│   ├── basic/.tasks.yaml
-│   └── benchmark/.tasks.yaml
-├── envs/
-│   ├── __init__.py
-│   └── mock_env.py      # HermesSandbox + TOOL_REGISTRY
-├── data/
-│   ├── __init__.py
-│   └── experience_replay.py  # TrajectoryStore
-├── training/
-│   ├── __init__.py
-│   ├── cispo.py         # CISPO_Trainer
-│   ├── grpo.py          # GRPO_Trainer
-│   └── rl_trainer.py    # RLTrainer 工厂
-├── rewards/
-│   ├── __init__.py
-│   └── verifiable_rewards.py  # VerifiableReward
-├── infra/
-│   ├── __init__.py
-│   ├── length_controller.py   # LengthElasticController
-│   └── async_scheduler.py     # AsyncRolloutScheduler
-├── evolution/
-│   ├── __init__.py
-│   ├── skill_evolution.py     # SkillEvolutionEngine
-│   └── cli.py                 # zilli-evolve CLI
-├── learner/
-│   ├── __init__.py
-│   └── continuous_learner.py  # ContinuousLearner
-├── configs/training_config.yaml
+├── dashboard_app.py     # Streamlit 管理台
+├── soak.py              # zilli soak 持续运行器
+├── tenancy.py           # TenantManager 多租户
+├── core/                # Agent, TaskRunner
+├── models/              # ModelBackend + Registry + Ollama/vLLM/llama.cpp
+├── routing/             # RouteClassifier, LocalHybridRouter, MOMRouter, PPM, Feedback
+├── evolution/           # SkillEvolutionEngine, DiversityController, cli
+├── loops/               # LoopRunner, MetaLoopRunner, HarnessOrchestrator, Verifier, unknowns
+├── training/            # RLTrainer, CISPO, GRPO, DistillationScheduler
+├── envs/                # HermesSandbox, CostController, PlannerBudget
+├── adaptive/            # DynamicSOTAScheduler, MultiObjectiveOptimizer
+├── pipeline/            # EvolutionPipeline, EvolveToTrainPipeline
+├── evaluation/          # MetaEvaluator, ExecutorOnlyEvaluator, DistillationBenchmark
+├── fusion/ rewards/ schema/ data/ infra/
+├── security/ privacy/ audit/ industry/
+├── server/              # FastAPI app + routes（/v1/*）
+├── workflow/            # CeleryDAGExecutor + CeleryApp
+├── distillation/        # dsl.py（A/B/多轮实验 DSL）+ losses.py
+├── hybrid/              # HybridExecutor, PrivacyGatekeeper
+├── swe/                 # SWEAgent, sandbox, verifier
+├── dag/ cache/ configs/ learner/ utils/
 └── scripts/run_evolution.sh
 ```
 
@@ -86,15 +76,21 @@ zilli/                   # Python 包根目录
 ```bash
 # 安装
 pip install -e .
+pip install -e ".[train,dev]"  # 训练 + 开发依赖
 
-# 运行测试
-python3 -m pytest tests/ -v
+# 运行测试（1028 tests）
+python3 -m pytest tests/ -q
+
+# 静态检查（0 errors）
+ruff check .
+pyright zilli/
 
 # CLI
 python3 -m zilli.cli --version
 python3 -m zilli.cli list-tasks
 python3 -m zilli.cli evaluate
 python3 -m zilli.cli sandbox-test
+python3 -m zilli.cli serve --host 127.0.0.1 --port 8900  # API 服务器
 ```
 
 ## 架构

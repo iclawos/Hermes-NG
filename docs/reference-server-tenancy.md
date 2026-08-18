@@ -30,6 +30,9 @@ zilli serve [--host 127.0.0.1] [--port 8900]
 | `ZILLI_CORS_ORIGINS` | localhost | CORS whitelist |
 | `ZILLI_API_DOCS` | true | Set `false` to hide OpenAPI docs |
 | `ZILLI_PPM_MODEL` | — | Path to trained PPM model (joblib/onnx) |
+| `ZILLI_BUDGET_FILE` | `~/.zilli_budget.json` | Budget state file path |
+
+**Fail-closed auth (since 2026-08-18)**: without `ZILLI_API_KEYS` configured, protected endpoints are **rejected with 401** for non-local clients; only requests from `127.0.0.1`/`::1` are allowed through (local dev convenience). Previously auth was fail-open when no keys were set.
 
 ### Security middleware chain
 
