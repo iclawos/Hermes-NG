@@ -744,3 +744,115 @@ class TestStreamErrorPaths:
         })
         body = resp.text
         assert "DONE" in body
+
+
+class TestEdgePaths:
+    def test_rate_limit_exceeded(self):
+        from fastapi.testclient import TestClient
+
+        from zilli.server.app import RateLimiter, ZilliAppState, create_app
+
+        os.environ["ZILLI_API_KEYS"] = "k1"
+        app = create_app()
+        with TestClient(app) as c:
+            c.headers.update({"Authorization": "Bearer k1"})
+            rl = RateLimiter(max_requests=2, window_seconds=60)
+            # 通过 ASGI 状态注入：直接替换实例级对象不可行，改走 HTTP 前先验证 check_rate_limit
+            state = ZilliAppState()
+            state.rate_limiter = rl
+            assert state.check_rate_limit("ip") is None
+            assert state.check_rate_limit("ip") is None
+            try:
+                state.check_rate_limit("ip")
+                raise AssertionError("expected 429")
+            except Exception as e:
+                assert getattr(e, "status_code", None) == 429
+        del os.environ["ZILLI_API_KEYS"]
+
+    def test_body_too_large(self, client):
+        # Content-Length 头直接触发中间件 413（无需发送真实大 body）
+        resp = client.post("/v1/chat/completions",
+                           content=b"{}",
+                           headers={"Content-Length": str(11 * 1024 * 1024)})
+        assert resp.status_code == 413
+
+    def test_invalid_tenant_route(self, client):
+        resp = client.post("/v1/route", json={
+            "request": "hello",
+        }, headers={"X-Tenant-ID": "invalid tenant id with spaces"})
+        assert resp.status_code == 400
+
+    def test_cache_stats_and_clear(self, client):
+        resp = client.get("/v1/cache/stats")
+        assert resp.status_code == 200
+        assert "entries" in resp.json()
+        resp = client.post("/v1/cache/clear")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+    def test_rate_limiter_window_rollover(self):
+        import time
+        from collections import deque
+
+        from zilli.server.app import RateLimiter
+
+        rl = RateLimiter(max_requests=1, window_seconds=60)
+        # 队列里只剩陈旧时间戳：窗口滚过后 check 应放行并记录新请求
+        rl.requests["k"] = deque([time.time() - 61], maxlen=100)
+        assert rl.check("k") is True
+        # 连续请求再次触发限制
+        assert rl.check("k") is False
+
+    def test_messages_to_prompt(self):
+        from zilli.server.app import _messages_to_prompt
+        from zilli.server.schemas import ChatMessage
+
+        msgs = [
+            ChatMessage(role="system", content="be brief"),
+            ChatMessage(role="user", content="hi"),
+            ChatMessage(role="assistant", content="yo"),
+        ]
+        out = _messages_to_prompt(msgs)
+        assert "System: be brief" in out
+        assert "User: hi" in out
+        assert "Assistant: yo" in out
+
+    def test_check_alive_missing_model(self):
+        import asyncio
+
+        from zilli.models.registry import ModelRegistry
+        from zilli.server.app import _check_alive
+
+        reg = ModelRegistry()
+        assert asyncio.run(_check_alive(reg, "nope")) is False
+
+    def test_check_alive_backend_raises(self):
+        from zilli.models.registry import ModelRegistry
+        from zilli.server.app import _check_alive
+
+        class Boom:
+            def __init__(self):
+                self.model_id = "boom"
+
+            async def health_check(self):
+                raise RuntimeError("down")
+
+        reg = ModelRegistry()
+        reg._backends["boom"] = Boom()  # type: ignore[assignment]
+        import asyncio
+        assert asyncio.run(_check_alive(reg, "boom")) is False
+
+    def test_docs_disabled(self):
+        from fastapi.testclient import TestClient
+
+        from zilli.server.app import create_app
+
+        os.environ["ZILLI_API_KEYS"] = "k1"
+        os.environ["ZILLI_API_DOCS"] = "false"
+        app = create_app()
+        with TestClient(app) as c:
+            c.headers.update({"Authorization": "Bearer k1"})
+            assert c.get("/docs").status_code == 404
+            assert c.get("/redoc").status_code == 404
+        os.environ.pop("ZILLI_API_DOCS", None)
+        del os.environ["ZILLI_API_KEYS"]

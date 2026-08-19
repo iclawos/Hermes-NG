@@ -13,6 +13,10 @@ from zilli.infra.device_utils import (
 )
 
 
+class _TensorDummy:
+    pass
+
+
 class TestDetectDevice:
     def test_detect_cpu_explicit(self):
         assert detect_device("cpu") == "cpu"
@@ -123,6 +127,102 @@ class TestAutoDetect:
     def test_auto_detect_with_mps(self, mock_auto):
         mock_auto.return_value = "mps"
         assert detect_device("auto") == "mps"
+
+
+class TestValidateDeviceTorch:
+    def _with_torch(self, mock_torch):
+        import importlib
+
+        from zilli.infra import device_utils
+        importlib.reload(device_utils)
+        return device_utils
+
+    def test_validate_cuda_available(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = True
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            du = self._with_torch(mock_torch)
+            assert du._validate_device("cuda") == "cuda"
+
+    def test_validate_cuda_unavailable(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            du = self._with_torch(mock_torch)
+            assert du._validate_device("cuda") == "cpu"
+
+    def test_validate_mps_available(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = True
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            du = self._with_torch(mock_torch)
+            assert du._validate_device("mps") == "mps"
+
+    def test_validate_mps_unavailable(self):
+        mock_torch = MagicMock()
+        mock_torch.backends.mps.is_available.return_value = False
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            du = self._with_torch(mock_torch)
+            assert du._validate_device("mps") == "cpu"
+
+    def test_validate_cuda_no_import(self):
+        with patch.dict("sys.modules", {"torch": None}):
+            import importlib
+
+            from zilli.infra import device_utils
+            importlib.reload(device_utils)
+            assert device_utils._validate_device("cuda") == "cpu"
+
+    def test_auto_detect_mps_real(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = True
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            du = self._with_torch(mock_torch)
+            assert du._auto_detect() == "mps"
+
+    def test_auto_detect_no_gpu_real(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            du = self._with_torch(mock_torch)
+            assert du._auto_detect() == "cpu"
+
+
+class TestToDeviceWithTorch:
+    def teardown_method(self):
+        from zilli.infra import device_utils
+        device_utils._global_device = None
+
+    def test_to_device_type_error(self):
+        mock_torch = MagicMock()
+        mock_torch.Tensor = _TensorDummy
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            import importlib
+
+            from zilli.infra import device_utils
+            importlib.reload(device_utils)
+            device_utils._global_device = None
+            with pytest.raises(TypeError, match="Expected torch.Tensor"):
+                device_utils.to_device({"not": "a tensor"})
+            device_utils._global_device = None
+
+    def test_to_device_cpu_branch(self):
+        mock_torch = MagicMock()
+        mock_torch.Tensor = _TensorDummy
+        fake_tensor = _TensorDummy()
+        fake_tensor.cpu = MagicMock(return_value="cpu_tensor")
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            import importlib
+
+            from zilli.infra import device_utils
+            importlib.reload(device_utils)
+            device_utils._global_device = "cpu"
+            result = device_utils.to_device(fake_tensor, "cpu")
+            assert result == "cpu_tensor"
+            device_utils._global_device = None
 
 
 class TestDeviceType:
