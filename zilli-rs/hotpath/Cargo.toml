@@ -1,0 +1,18 @@
+[package]
+name = "zilli_hotpath"
+version = "0.3.0"
+edition = "2021"
+description = "Zilli Rust hotpath: PPM prediction + evolution primitives (PyO3)"
+license = "MIT"
+
+[lib]
+name = "zilli_hotpath"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+regex = "1"
+
+[profile.release]
+lto = "thin"
+opt-level = 3

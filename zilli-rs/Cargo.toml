@@ -5,6 +5,9 @@ edition = "2024"
 description = "Zilli: self-evolving AI agent framework for autonomous tool development"
 license = "MIT"
 
+[workspace]
+members = [".", "hotpath"]
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

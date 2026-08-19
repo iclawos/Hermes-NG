@@ -2,6 +2,27 @@
 
 ## Unreleased (2026-08-19)
 
+### Rust 演化核心热路径（PPM 预测迁移至 Rust）
+
+`zilli_hotpath` PyO3 绑定 v0.3.0，与纯 Python `RegexClassifier` **功能一致性 100%**（parity 14/14 含中文样本），性能 ~20×。
+
+1244→1247 tests / ruff 0 / pyright 0 / 覆盖率 90%。
+
+#### Added
+- **`zilli-rs/hotpath/`**：PyO3 扩展 crate（workspace 成员），暴露 `ppm_predict(text)`：
+  - 家族预测：与 Python `_predict_family` 相同的正则 + 优先级（code→reasoning→analysis→creative→simple→unknown）
+  - 难度预测：与 Python `_predict_difficulty` 相同的权重表 + 长度/关键词/复杂/架构/数学奖励
+  - 置信度：与 Python `_estimate_confidence` 相同的长度阈值（<10→0.95，>500→0.6，否则 0.8）
+- **maturin 构建**：`pip install zilli[rust]` 兼容，wheel 已安装（`zilli_hotpath-0.3.0`）
+- **`tests/test_ppm_classifier.py::TestRustHotpathParity`**：3 tests（importable / parity / 性能 ≥5×）
+- **性能**：7.7µs/call vs 纯 Python 155µs/call ≈ **20.2×**（目标 10× 达成）
+
+#### Fixed
+- 已安装的 `zilli-hotpath` 0.1.0（无源码、未入库）与 Python 实现**不一致**（置信度阈值错误、难度数学错误），已用 v0.3.0 替换
+
+#### Tests
+- 1244 → **1247** tests；Rust `cargo test` 38+12 = 50 passed，clippy 0 warnings
+
 ### L6 群智能（Swarm Intelligence）里程碑
 
 多 Agent 协作骨架落地。RFC-006 + `zilli/swarm/` 包 + `zilli swarm` CLI。

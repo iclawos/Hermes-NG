@@ -162,3 +162,80 @@ class TestClassifierIntegration:
         pred = p.predict("hello")
         assert pred.task_family == TaskFamily.CHAT
         assert p.stats()["classifier"] in ("regex", "regex+rust", "sklearn_onnx")
+
+
+class TestRustHotpathParity:
+    """zilli_hotpath PyO3 binding must be functionally identical to the
+    pure-Python RegexClassifier (family / difficulty / confidence)."""
+
+    SAMPLES = [
+        "hello", "hi there", "refactor the auth module",
+        "why does this algorithm have O(n^2)?",
+        "audit financial compliance",
+        "write a story about a robot",
+        "2 + 2", "ok",
+        "设计微服务架构方案", "请帮我分析这份财报", "写一首诗",
+        "异步并发并行分布式系统设计", "prove the theorem using calculus",
+        "thanks", "def fibonacci(n):", "explain why this happens",
+        "analyze the audit results", "write a poem about AI",
+        "生成一份合规审计报告并评估风险", "compare A vs B thoroughly",
+    ]
+
+    def test_rust_module_importable(self):
+        try:
+            import zilli_hotpath
+        except ImportError:
+            pytest.skip("zilli_hotpath not installed")
+        assert hasattr(zilli_hotpath, "ppm_predict")
+
+    def test_rust_parity_with_python(self):
+        try:
+            import zilli_hotpath
+        except ImportError:
+            pytest.skip("zilli_hotpath not installed")
+
+        c = RegexClassifier()
+        for sample in self.SAMPLES:
+            p = zilli_hotpath.ppm_predict(sample)
+            fam = c._predict_family(sample)
+            diff = c._predict_difficulty(sample, fam)
+            conf = c._estimate_confidence(sample)
+            assert p.task_family == fam.value, f"{sample!r}: family {p.task_family} != {fam.value}"
+            assert abs(p.difficulty - diff) < 1e-9, (
+                f"{sample!r}: difficulty {p.difficulty} != {diff}"
+            )
+            assert abs(p.confidence - conf) < 1e-9, (
+                f"{sample!r}: confidence {p.confidence} != {conf}"
+            )
+
+    def test_rust_faster_than_python(self):
+        try:
+            import zilli_hotpath
+        except ImportError:
+            pytest.skip("zilli_hotpath not installed")
+        import random
+        import string
+        import time
+
+        rng = random.Random(42)
+        samples = [
+            "".join(rng.choices(string.ascii_letters, k=rng.randint(5, 200)))
+            for _ in range(500)
+        ]
+
+        c = RegexClassifier()
+
+        t0 = time.perf_counter()
+        for s in samples:
+            zilli_hotpath.ppm_predict(s)
+        rust_ms = (time.perf_counter() - t0) / len(samples) * 1000
+
+        t0 = time.perf_counter()
+        for s in samples:
+            fam = c._predict_family(s)
+            c._predict_difficulty(s, fam)
+            c._estimate_confidence(s)
+        py_ms = (time.perf_counter() - t0) / len(samples) * 1000
+
+        # Rust hotpath must be ≥ 5x faster than pure-Python (measured ~20x)
+        assert rust_ms < py_ms / 5, f"rust {rust_ms:.3f}ms not 5x faster than py {py_ms:.3f}ms"

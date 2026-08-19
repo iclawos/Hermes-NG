@@ -409,7 +409,7 @@ MetaLoopRunner.run(input_data)
 | P2 | ✅ 进化引擎并发处理（asyncio 并行，`evolution_concurrency`） | `evolution/` | — | F-7 |
 | P2 | ✅ MOM 行业模板动态加载（`ZILLI_INDUSTRY_CONFIG` YAML + `/v1/industry/reload`） | `industry/` | — | F-15 |
 | P3 | ✅ EntityReplacer / EntityRestorer 嵌套结构（`zilli/privacy/entities.py`） | `privacy/` | — | F-0.3 |
-| P1 | Rust crate 演化核心、loop 引擎迁移 | `zilli-rs/` | 24h | F-24 |
+| P1 | ✅ Rust 演化核心热路径：PPM 预测迁移至 Rust（`zilli_hotpath` PyO3 v0.3.0，2026-08-19，7.7µs/call ≈ 20.2×，parity 14/14） | `zilli-rs/hotpath/` | 24h | F-24 |
 | P2 | ✅ 补充集成测试（route → execute → feedback → evolve，含执行环节 + fallback 链；2026-08-18，1087→1105 tests） | `tests/` | — | — |
 | P2 | ✅ 覆盖率 90% 里程碑（CLI/registry/profile/continuous_learner/server/experience_replay/mock_env 等补测；2026-08-19，1105→1204 tests，86%→90%） | `tests/` | — | — |
 
@@ -441,10 +441,11 @@ MetaLoopRunner.run(input_data)
 | 里程碑 | 目标 | 验收标准 | 状态 |
 |--------|------|---------|------|
 | 端到端进化训练管线 | Evolve → Train → Deploy → Monitor 全自动 | 单轮 < 4h，回滚 < 5min | 已有实现 |
-| Rust 演化核心 | Loop 引擎、PPM 预测迁移至 Rust | 性能提升 10×，功能一致性 100% | 待做 |
+| Rust 演化核心 | Loop 引擎、PPM 预测迁移至 Rust | 性能提升 10×，功能一致性 100% | ✅ 2026-08-19（`zilli_hotpath` PyO3 v0.3.0：PPM 预测 7.7µs/call ≈ 20.2×，parity 14/14） |
 | 多租户密钥绑定 | API Key 注册时绑定 tenant_id | 跨租户访问 401，伪造租户 401 | ✅ 2026-08-18 |
 | 覆盖率 90% | 新增 200+ 测试 | pytest 报告 | ✅ 2026-08-19（86.0%→90.0%，1105→1204 tests） |
-| L6 群智能设计 | Agent 间路由、任务分解、共识机制 | RFC 文档 | 待做 |
+| L6 群智能 | 多 Agent 协作（分解→路由→共识） | `zilli swarm` CLI + 40 tests | ✅ 2026-08-19（RFC-006，1204→1244 tests） |
+| L6 群智能设计 | Agent 间路由、任务分解、共识机制 | RFC 文档 | ✅ 2026-08-19（RFC-006 + `zilli/swarm/` 骨架 + `zilli swarm` CLI） |
 | MOM 行业模板动态加载 | 运行时热更新行业配置 | 无重启加载 | ✅ 2026-08-18 |
 | EntityReplacer/Restorer 嵌套 | 占位符替换回替，支持嵌套结构 | 占位符替换准确率 100% | ✅ 2026-08-18 |
 
