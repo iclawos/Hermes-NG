@@ -403,8 +403,8 @@ MetaLoopRunner.run(input_data)
 
 | 优先级 | 任务 | 文件 | 预估工时 | 对应 PRD |
 |--------|------|------|----------|---------|
-| P0 | 端到端进化训练管线整合（Evolve → Train → Deploy → Monitor） | `pipeline/`, `run_training.py` | 8h | F-11 |
-| P0 | 训练 Pipeline 断点续训支持 | `run_training.py` | 8h | F-4 |
+| P0 | ✅ 端到端进化训练管线整合（Evolve → Train → Deploy → Monitor，`EvolveToTrainPipeline` 最小闭环 e2e 测试覆盖） | `pipeline/`, `run_training.py` | 8h | F-11 |
+| P0 | ✅ 训练 Pipeline 断点续训支持（`TrainingExperiment.resume_from` + CLI `--resume`，`test_checkpoint_resume.py` 9 tests） | `run_training.py` | 8h | F-4 |
 | P1 | ✅ T-10 多租户密钥绑定（2026-08-18 完成，见 T-10 行） | `server/app.py` | — | F-24 |
 | P2 | ✅ 进化引擎并发处理（asyncio 并行，`evolution_concurrency`） | `evolution/` | — | F-7 |
 | P2 | ✅ MOM 行业模板动态加载（`ZILLI_INDUSTRY_CONFIG` YAML + `/v1/industry/reload`） | `industry/` | — | F-15 |
@@ -440,7 +440,8 @@ MetaLoopRunner.run(input_data)
 
 | 里程碑 | 目标 | 验收标准 | 状态 |
 |--------|------|---------|------|
-| 端到端进化训练管线 | Evolve → Train → Deploy → Monitor 全自动 | 单轮 < 4h，回滚 < 5min | 已有实现 |
+| 端到端进化训练管线 | Evolve → Train → Deploy → Monitor 全自动 | 单轮 < 4h，回滚 < 5min | ✅ 已有实现（`EvolveToTrainPipeline` e2e 最小闭环测试） |
+| 训练断点续训 | 检查点保存/恢复，配置 hash 校验 | `resume_from` + CLI `--resume` | ✅ 已实现（`test_checkpoint_resume.py` 9 tests） |
 | Rust 演化核心 | Loop 引擎、PPM 预测迁移至 Rust | 性能提升 10×，功能一致性 100% | ✅ 2026-08-19（`zilli_hotpath` PyO3 v0.3.0：PPM 预测 7.7µs/call ≈ 20.2×，parity 14/14） |
 | 多租户密钥绑定 | API Key 注册时绑定 tenant_id | 跨租户访问 401，伪造租户 401 | ✅ 2026-08-18 |
 | 覆盖率 90% | 新增 200+ 测试 | pytest 报告 | ✅ 2026-08-19（86.0%→90.0%，1105→1204 tests） |
