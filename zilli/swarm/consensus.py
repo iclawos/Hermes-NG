@@ -72,6 +72,7 @@ class ConsensusEngine:
 
         winner = self._decide(topic, options, votes, level)
         record.resolution = winner
+        record.human_escalated = level == ConsensusLevel.HUMAN
         record.reason = f"{level.value} consensus on {winner!r}"
         return record
 
@@ -100,13 +101,8 @@ class ConsensusEngine:
             losers = [o for o in options if o != winner]
             return self._arbiter_fn(topic, [winner, *losers], [winner])
 
-        # HUMAN：不自动裁决，交给人工（返回当前领先者并标记升级）
-        self._human_escalated = True
+        # HUMAN：不自动裁决，交给人工（返回当前领先者；升级标记在 record 上）
         return winner
-
-    @property
-    def human_escalated(self) -> bool:
-        return getattr(self, "_human_escalated", False)
 
 
 __all__ = ["ConsensusEngine", "ConsensusRecord", "ConsensusLevel"]

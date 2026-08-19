@@ -45,10 +45,12 @@ class TaskDecomposer:
         decompose_fn: Optional[DecomposeFn] = None,
         min_difficulty: float = 0.7,
         max_fanout: int = MAX_FANOUT,
+        max_depth: int = MAX_DEPTH,
     ) -> None:
         self._decompose_fn = decompose_fn
         self.min_difficulty = min_difficulty
         self.max_fanout = max_fanout
+        self.max_depth = max_depth
 
     async def decompose(
         self,
@@ -135,6 +137,23 @@ class TaskDecomposer:
         for sid in by_id:
             if not _acyclic(sid):
                 raise DecomposeError(f"cycle detected involving {sid!r}")
+
+        # 深度上限：最长依赖链不得超过 max_depth
+        depth_cache: dict[str, int] = {}
+
+        def _depth(sid: str) -> int:
+            if sid in depth_cache:
+                return depth_cache[sid]
+            deps = [d for d in by_id[sid].dependencies if d in by_id]
+            d = 1 + max((_depth(dep) for dep in deps), default=0)
+            depth_cache[sid] = d
+            return d
+
+        for sid in by_id:
+            if _depth(sid) > self.max_depth:
+                raise DecomposeError(
+                    f"dependency chain depth exceeds max_depth {self.max_depth} at {sid!r}"
+                )
 
 
 __all__ = ["TaskDecomposer", "DecomposeResult", "DecomposeError"]

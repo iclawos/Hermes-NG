@@ -66,11 +66,15 @@ class AgentRouter:
 
     def _pick_model(self, profile_slot: str) -> Optional[ModelEntry]:
         """从 ModelProfile 中按槽位名称挑一个模型。"""
-        for entry in self._profile._models.values():
-            if entry.name == profile_slot or profile_slot in entry.name:
+        entries = self._profile.models()
+        for entry in entries:
+            if entry.name == profile_slot:
+                return entry
+        # 精确匹配落空再退到子串匹配
+        for entry in entries:
+            if profile_slot in entry.name:
                 return entry
         # 无槽位匹配 → 任选一个模型
-        entries = list(self._profile._models.values())
         return entries[0] if entries else None
 
 

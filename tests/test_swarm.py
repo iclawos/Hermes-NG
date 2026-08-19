@@ -135,6 +135,19 @@ def test_ready_subtasks_filters():
     assert {s.id for s in g.ready_subtasks([a, b])} == {"a", "b"}
 
 
+def test_consumed_dependency_still_satisfies():
+    """产物被 consume 后（status=consumed）下游子任务仍可运行。"""
+    g = ArtifactGraph()
+    art = Artifact(id="a1", producer_role="researcher", schema=FakeSchema,
+                   payload={})
+    art.status = "done"
+    g.put(art)
+    g.consume("a1", "writer")
+    dependent = SubTask(id="b", description="b", role="writer",
+                        dependencies=["a1"])
+    assert g.is_runnable(dependent) is True
+
+
 # ── decomposer ───────────────────────────────────────────────────────
 
 def test_decompose_below_threshold_single_task():
@@ -202,6 +215,33 @@ def test_decompose_empty_rejected():
         asyncio.run(d.decompose("x", difficulty=0.9))
 
 
+def test_decompose_depth_limit_enforced():
+    async def deep(task, family, difficulty):
+        # 7 层链：st-1 ← st-2 ← … ← st-7（深度 7 > MAX_DEPTH 6）
+        return [
+            SubTask(id=f"st-{i}", description=f"t{i}", role="writer",
+                    dependencies=[f"st-{i - 1}"] if i > 1 else [])
+            for i in range(1, 8)
+        ]
+
+    d = TaskDecomposer(decompose_fn=deep)
+    with pytest.raises(DecomposeError, match="depth"):
+        asyncio.run(d.decompose("x", difficulty=0.9))
+
+
+def test_decompose_depth_within_limit_ok():
+    async def ok(task, family, difficulty):
+        return [
+            SubTask(id=f"st-{i}", description=f"t{i}", role="writer",
+                    dependencies=[f"st-{i - 1}"] if i > 1 else [])
+            for i in range(1, 7)
+        ]
+
+    d = TaskDecomposer(decompose_fn=ok)
+    result = asyncio.run(d.decompose("x", difficulty=0.9))
+    assert len(result.subtasks) == 6
+
+
 # ── consensus ────────────────────────────────────────────────────────
 
 def test_consensus_majority():
@@ -249,6 +289,18 @@ def test_consensus_human_escalation_flag():
     assert rec.resolution in ("x", "y")
 
 
+def test_consensus_human_escalation_recorded():
+    eng = ConsensusEngine()
+    rec = eng.reach("topic", ["x", "y"], ConsensusLevel.HUMAN)
+    assert rec.human_escalated is True
+
+
+def test_consensus_majority_not_marked_human():
+    eng = ConsensusEngine()
+    rec = eng.reach("topic", ["x", "y"], ConsensusLevel.MAJORITY)
+    assert rec.human_escalated is False
+
+
 # ── router ───────────────────────────────────────────────────────────
 
 def test_router_assign_known_role():
@@ -289,6 +341,39 @@ def test_orchestrator_single_subtask():
     assert isinstance(result, SwarmResult)
     assert result.success is True
     assert result.final_text != ""
+
+
+def test_orchestrator_final_text_from_sink_deterministic():
+    """并行分支下 final_text 必须来自 sink 节点，与完成时序无关。"""
+    async def branches(task, family, difficulty):
+        return [
+            SubTask(id="root", description="root", role="researcher"),
+            SubTask(id="leaf-a", description="a", role="writer",
+                    dependencies=["root"], parallel=True),
+            SubTask(id="leaf-b", description="b", role="writer",
+                    dependencies=["root"], parallel=True),
+        ]
+
+    def executor(st, graph):
+        # leaf-a 故意慢，保证完成顺序不稳定
+        if st.id == "leaf-a":
+            time.sleep(0.02)
+        return {"text": f"out-{st.id}"}
+
+    async def run():
+        d = TaskDecomposer(decompose_fn=branches)
+        r = AgentRouter()
+        c = ConsensusEngine()
+        o = SwarmOrchestrator(d, r, c, executor_fn=executor)
+        return await o.execute("complex", industry="")
+
+    first = asyncio.run(run())
+    assert first.success is True
+    # sink = leaf-a 与 leaf-b（皆无下游）；声明顺序最后的 sink 是 leaf-b
+    assert first.final_text == "out-leaf-b"
+    # 重复运行结果一致
+    for _ in range(3):
+        assert asyncio.run(run()).final_text == "out-leaf-b"
 
 
 def test_orchestrator_dag_three_roles():

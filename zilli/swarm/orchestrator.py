@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from zilli.swarm.artifacts import Artifact, ArtifactGraph, SubTask
 from zilli.swarm.consensus import ConsensusEngine
@@ -96,7 +96,6 @@ class SwarmOrchestrator:
     async def _run_dag(self, subtasks: list[SubTask], graph: ArtifactGraph,
                        start: float) -> SwarmResult:
         pending = list(subtasks)
-        completed: list[SubTask] = []
         sem = asyncio.Semaphore(self.max_concurrency)
 
         async def _worker(st: SubTask) -> None:
@@ -118,8 +117,6 @@ class SwarmOrchestrator:
                 except Exception as e:
                     st.status = "rejected"
                     st.error = str(e)
-                finally:
-                    completed.append(st)
 
         while pending:
             ready = graph.ready_subtasks(pending)
@@ -135,13 +132,17 @@ class SwarmOrchestrator:
 
         rejected = [st for st in subtasks if st.status == "rejected"]
         success = not rejected
-        # 最终产物：取最后一个 done 子任务的产物文本
+        # 最终产物：确定性取 sink 子任务（无下游依赖者）中声明顺序最后的
+        # done 节点；无 sink 时退化为声明顺序最后的 done 节点。
+        # 不能用完成顺序——并行分支下完成顺序由时序决定，结果不可复现。
+        depended_on = {d for st in subtasks for d in st.dependencies}
+        done = [st for st in subtasks if st.status == "done"]
+        sinks = [st for st in done if st.id not in depended_on]
         final_text = ""
-        for st in completed:
-            if st.status == "done":
-                art = graph.get(st.artifact_id)
-                if art:
-                    final_text = str(art.payload.get("text", art.payload.get("result", "")))
+        for st in (sinks or done)[-1:]:
+            art = graph.get(st.artifact_id)
+            if art:
+                final_text = str(art.payload.get("text", art.payload.get("result", "")))
 
         if success and self._verify_fn is not None and not self._verify_fn(final_text):
             success = False
@@ -179,7 +180,7 @@ class SwarmOrchestrator:
 class _FreeSchema(BaseModel):
     """宽松 schema：任何 dict 都通过。"""
 
-    model_config = {"extra": "allow"}  # type: ignore[arg-type]
+    model_config = ConfigDict(extra="allow")
 
 
 __all__ = ["SwarmOrchestrator", "SwarmResult"]

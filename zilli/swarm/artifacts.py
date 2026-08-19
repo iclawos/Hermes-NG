@@ -82,10 +82,11 @@ class ArtifactGraph:
             art.status = "rejected"
 
     def pending_dependencies(self, subtask: SubTask) -> list[str]:
+        # consumed 也算已满足：产物已成功产出，只是被消费方读过
         return [
             d for d in subtask.dependencies
             if (self._artifacts.get(d) is None
-                or self._artifacts[d].status != "done")
+                or self._artifacts[d].status not in ("done", "consumed"))
         ]
 
     def is_runnable(self, subtask: SubTask) -> bool:

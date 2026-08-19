@@ -2,6 +2,27 @@
 
 ## Unreleased (2026-08-19)
 
+### Swarm 审计修复（k3 代码审计）
+
+对 L6 swarm 包 + routing/profile 的专项审计，修复 6 项发现，补 6 个测试（1247→1253 tests）。
+
+#### Fixed
+- **consensus**：`ConsensusRecord.human_escalated` 字段从未被填充（`_decide` 写的是引擎级残留状态且跨调用不清除）——改为在 `reach()` 内按 level 直接置位，删除引擎级 `_human_escalated` 属性
+- **orchestrator**：并行分支下 `final_text` 取"最后完成"的子任务产物——完成顺序由时序决定导致结果不可复现；改为确定性取 sink 节点（无下游依赖者）中声明顺序最后的 done 节点
+- **decomposer**：`MAX_DEPTH = 6` 已声明但从未执行——补上最长依赖链深度校验（新增 `max_depth` 构造参数）
+- **artifacts**：产物被 `consume()` 后状态变 `consumed`，导致下游依赖判定为未满足而死锁——`pending_dependencies` 现在把 `consumed` 视为已满足
+- **router**：`_pick_model` 访问 `ModelProfile._models` 私有成员，且子串匹配优先于精确匹配——改用新增公开访问器 `ModelProfile.models()`，精确匹配优先、子串匹配兜底
+- **orchestrator**：`_FreeSchema` 改用 `ConfigDict(extra="allow")`，移除 `# type: ignore`；清理 `_run_dag` 中不再使用的 `completed` 列表
+
+#### Tests
+- consensus：`human_escalated` 置位 / 非 HUMAN 不误标（2 tests）
+- decomposer：深度上限拒绝 7 层链 / 6 层链通过（2 tests）
+- artifacts：consumed 依赖仍可运行（1 test）
+- orchestrator：并行分支 sink 确定性（含 3 次重复一致性）（1 test）
+
+#### Docs
+- `docs/engineering-plan.md`：能力成熟度阶梯 L6 行由"🔮 待规划"更正为"✅ RFC-006"
+
 ### Rust 演化核心热路径（PPM 预测迁移至 Rust）
 
 `zilli_hotpath` PyO3 绑定 v0.3.0，与纯 Python `RegexClassifier` **功能一致性 100%**（parity 14/14 含中文样本），性能 ~20×。

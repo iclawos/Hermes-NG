@@ -88,6 +88,10 @@ class ModelProfile:
     def get(self, model_id: str) -> Optional[ModelEntry]:
         return self._models.get(model_id)
 
+    def models(self) -> list[ModelEntry]:
+        """返回全部已注册模型（注册顺序）。"""
+        return list(self._models.values())
+
     def filter(
         self,
         task_family: str,
