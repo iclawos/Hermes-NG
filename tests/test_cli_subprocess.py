@@ -27,9 +27,11 @@ def _run_cli(*args, timeout=60):
 
 class TestCLIBasics:
     def test_version(self):
+        from zilli.version import version as pkg_version
+
         r = _run_cli("--version")
         assert r.returncode == 0
-        assert "1.0.0" in r.stdout
+        assert f"v{pkg_version}" in r.stdout
 
     def test_no_args_shows_help(self):
         r = _run_cli()

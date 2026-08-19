@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased (2026-08-19)
+## v1.1.0 (2026-08-19)
+
+### 覆盖率 92% 里程碑（90%→92%）
+
+补测 11 个测试文件，覆盖此前未触达的分支，**1380 tests / ruff 0 / pyright 0 / 覆盖率 92.0%**。
+
+#### Added
+- **`test_ppm_classifier_onnx.py`**（12 tests）：PPM ONNX 加载/预测路径（mock onnxruntime：模型缺失 / onnx 对不完整 / 模块缺失 / plain / unknown family / bytes label / probs dict+list / metadata sidecar+默认 / 未加载即 classify / joblib 无 predict_proba 回退）
+- **`test_server.py::TestEdgePaths`**（9 tests）：限流 429 / 413 体积超限 / 非法租户 400 / cache stats+clear / 限流窗口滚动 / messages_to_prompt / check_alive 缺模型 / backend 抛错 / docs 禁用鉴权
+- **`test_champion_challenger.py`**（22 tests）：无冠军 / 未注册挑战者 / 空分数 / 冠军获胜 / `_bootstrap_p` / `_std` / should_deploy 各条件 / promote+rollback 各分支 / leaderboard
+- **`test_vector_store_chroma.py`**（8 tests）：chromadb 后端初始化（Persistent/HttpClient）/ upsert / query / get / count / delete / stats / 异常回退（mock chromadb，vector_store 68%→92%）
+- **`test_model_backends_http.py`**（27 tests）：Ollama / vLLM / llama.cpp 三后端的 generate 成功 / HTTP 错误 / 异常 / chat / health_check 各分支 + stream 全分支（ollama 77%→~95%、vllm 78%、llamacpp 74%）
+- **`test_swe_sandbox_container.py`**（8 tests）：docker 容器分支（ensure_container / run_command exec / copy_to / copy_from / cleanup 错误+成功）
+- **`test_swe_agent_edges.py`**（10 tests）：sandbox 全流程 / verbose narrow / 无上下文 / grep 超时吞掉 / read 回退 / propose_fix 生成 / patch 应用
+- **`test_pii_edges.py`**（10 tests）：非法自定义正则 / Luhn 长度+N>9+校验失败跳过 / sanitize 默认掩码 / sanitize_text
+- **`test_run_training_main_edges.py`**（3 tests）：config 缺失报错 / resume 恢复 / resume 不存在 checkpoint
+- **`test_distillation_edges.py`**（9 tests）：空 buffer 损失 / GPU→CPU 回退 / full-SFT+LoRA 回调异常吞掉 / 双回调成功 / 不可序列化样本字段 / 空 batch
+- **`test_device_utils.py`**（+9 tests）：torch mock 下 cuda/mps 校验、auto_detect GPU 分支、to_device 类型检查+CPU 分支
+
+#### Docs
+- `docs/engineering-plan.md`：发布检查清单覆盖率行 90%→92%，1380 tests
 
 ### Swarm 审计修复（k3 代码审计）
 

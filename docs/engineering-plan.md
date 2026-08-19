@@ -444,7 +444,7 @@ MetaLoopRunner.run(input_data)
 | 训练断点续训 | 检查点保存/恢复，配置 hash 校验 | `resume_from` + CLI `--resume` | ✅ 已实现（`test_checkpoint_resume.py` 9 tests） |
 | Rust 演化核心 | Loop 引擎、PPM 预测迁移至 Rust | 性能提升 10×，功能一致性 100% | ✅ 2026-08-19（`zilli_hotpath` PyO3 v0.3.0：PPM 预测 7.7µs/call ≈ 20.2×，parity 14/14） |
 | 多租户密钥绑定 | API Key 注册时绑定 tenant_id | 跨租户访问 401，伪造租户 401 | ✅ 2026-08-18 |
-| 覆盖率 90% | 新增 200+ 测试 | pytest 报告 | ✅ 2026-08-19（86.0%→90.0%，1105→1204 tests） |
+| 覆盖率 90% | 新增 200+ 测试 | pytest 报告 | ✅ 2026-08-19（90.0%→92.0%，1204→1380 tests，11 个测试文件补测 ONNX/chroma/后端/沙箱/PII/SWE 边界） |
 | L6 群智能 | 多 Agent 协作（分解→路由→共识） | `zilli swarm` CLI + 40 tests | ✅ 2026-08-19（RFC-006，1204→1244 tests） |
 | L6 群智能设计 | Agent 间路由、任务分解、共识机制 | RFC 文档 | ✅ 2026-08-19（RFC-006 + `zilli/swarm/` 骨架 + `zilli swarm` CLI） |
 | MOM 行业模板动态加载 | 运行时热更新行业配置 | 无重启加载 | ✅ 2026-08-18 |
